@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { UserRole } from '../../services/firebase';
+import { UserRole, FIREBASE_PROJECT_ID } from '../../services/firebase';
 import { 
   X, 
   Lock, 
@@ -15,7 +15,15 @@ import {
   Eye,
   EyeOff,
   LogIn,
-  UserPlus
+  UserPlus,
+  ExternalLink,
+  Copy,
+  Check,
+  Globe,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  Compass
 } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
@@ -26,6 +34,7 @@ export const AuthModal: React.FC = () => {
     loginWithEmail, 
     signupWithEmail, 
     loginWithGoogle, 
+    loginWithGoogleRedirect,
     sendResetPasswordEmail,
     loginAsGuest,
     loading 
@@ -38,7 +47,13 @@ export const AuthModal: React.FC = () => {
   const [displayName, setDisplayName] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('researcher');
   const [error, setError] = useState<string | null>(null);
+  const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
+  const [showVercelGuide, setShowVercelGuide] = useState(false);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isVercelDomain = currentHost.includes('vercel.app');
 
   // Sync mode whenever authModalMode or modal open state changes
   useEffect(() => {
@@ -46,10 +61,20 @@ export const AuthModal: React.FC = () => {
       setMode(authModalMode);
       setError(null);
       setSuccessMessage(null);
+      setIsUnauthorizedDomain(false);
     }
   }, [authModalMode, isAuthModalOpen]);
 
   if (!isAuthModalOpen) return null;
+
+  const handleCopyDomain = (textToCopy?: string) => {
+    const text = textToCopy || currentHost || 'vercel.app';
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 2500);
+    }
+  };
 
   const formatAuthError = (err: any): string => {
     if (!err) return 'Authentication encountered an issue.';
@@ -72,10 +97,14 @@ export const AuthModal: React.FC = () => {
       return 'Google sign-in window was closed before finishing. Please try again.';
     }
     if (code === 'auth/popup-blocked') {
-      return 'Google sign-in popup was blocked by browser. Please allow popups or use Email sign-in.';
+      return 'Google sign-in popup was blocked by browser. Please allow popups or use Redirect sign-in.';
     }
     if (code === 'auth/unauthorized-domain') {
-      return 'Firebase domain authorization in progress. You can explore immediately using the Guest role buttons below.';
+      setIsUnauthorizedDomain(true);
+      return `Domain authorization required: Firebase has not authorized "${currentHost || 'this domain'}" for Google Sign-In yet.`;
+    }
+    if (code === 'auth/operation-not-allowed') {
+      return 'Google Sign-In is not enabled in the Firebase Console. Please enable Google provider under Authentication > Sign-in method.';
     }
     if (code === 'auth/network-request-failed') {
       return 'Network connection problem. Please check your connectivity and retry.';
@@ -87,6 +116,7 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     setError(null);
     setSuccessMessage(null);
+    setIsUnauthorizedDomain(false);
 
     try {
       if (mode === 'login') {
@@ -115,6 +145,7 @@ export const AuthModal: React.FC = () => {
   const handleGoogleAuth = async () => {
     setError(null);
     setSuccessMessage(null);
+    setIsUnauthorizedDomain(false);
     try {
       await loginWithGoogle(selectedRole);
     } catch (err: any) {
@@ -123,8 +154,21 @@ export const AuthModal: React.FC = () => {
     }
   };
 
+  const handleGoogleRedirectAuth = async () => {
+    setError(null);
+    setSuccessMessage(null);
+    setIsUnauthorizedDomain(false);
+    try {
+      await loginWithGoogleRedirect();
+    } catch (err: any) {
+      console.error('Google redirect auth error:', err);
+      setError(formatAuthError(err));
+    }
+  };
+
   const handleGuestQuickStart = async (role: UserRole) => {
     setError(null);
+    setIsUnauthorizedDomain(false);
     try {
       await loginAsGuest(role);
     } catch (err: any) {
@@ -207,16 +251,99 @@ export const AuthModal: React.FC = () => {
           )}
 
           {/* Error Banner */}
-          {error && (
+          {error && !isUnauthorizedDomain && (
             <div className="m-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <span className="font-medium block">{error}</span>
                 {error.includes('popup was blocked') && (
-                  <span className="text-[11px] text-rose-700 block">
-                    Tip: Look at the top right of your address bar to allow pop-ups for this site.
-                  </span>
+                  <div className="pt-1 flex items-center gap-2">
+                    <span className="text-[11px] text-rose-700">
+                      Tip: You can use the redirect method instead of popup:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleGoogleRedirectAuth}
+                      className="px-2 py-0.5 rounded bg-rose-200 hover:bg-rose-300 text-rose-900 text-[10px] font-mono font-bold transition-colors"
+                    >
+                      Try Redirect Sign-In
+                    </button>
+                  </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Vercel / Domain Authorization Required Banner */}
+          {isUnauthorizedDomain && (
+            <div className="m-4 p-4 rounded-xl bg-amber-50 border border-amber-200 text-stone-800 text-xs space-y-3 animate-in fade-in">
+              <div className="flex items-start gap-2.5">
+                <Globe className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <h4 className="font-mono font-bold text-amber-900 text-xs">
+                    Vercel / Domain Authorization Required
+                  </h4>
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    Firebase blocks Google OAuth on new deployment domains until they are added to the Authorized Domains list in your Firebase Console.
+                  </p>
+                </div>
+              </div>
+
+              {/* Current Hostname Display & Copy */}
+              <div className="bg-white p-2.5 rounded-lg border border-amber-200 flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] uppercase font-mono text-stone-400 block">Your Current Domain</span>
+                  <code className="text-xs font-mono font-bold text-[#1A42D9] truncate block">
+                    {currentHost || 'your-project.vercel.app'}
+                  </code>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyDomain(currentHost)}
+                  className="px-2.5 py-1.5 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-mono font-medium flex items-center gap-1.5 transition-colors flex-shrink-0 cursor-pointer"
+                  title="Copy domain to clipboard"
+                >
+                  {copiedDomain ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedDomain ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+
+              {/* Step-by-step instructions */}
+              <div className="space-y-1.5 text-[11px] text-stone-600 font-mono bg-amber-100/50 p-2.5 rounded-lg border border-amber-200/70">
+                <div className="font-bold text-stone-800">Quick 2-Step Fix in Firebase Console:</div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-amber-700 font-bold">1.</span>
+                  <span>Open <strong>Authentication</strong> → <strong>Settings</strong> → <strong>Authorized domains</strong></span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-amber-700 font-bold">2.</span>
+                  <span>Click <strong>Add domain</strong>, paste <code className="bg-white px-1 py-0.5 rounded border border-amber-300 text-stone-900">{currentHost || 'vercel.app'}</code>, and click <strong>Save</strong>.</span>
+                </div>
+                <p className="text-[10px] text-stone-500 italic mt-1">
+                  Tip: Adding <code className="bg-white px-1 py-0.5 rounded text-stone-700">vercel.app</code> covers all your Vercel preview deployments too!
+                </p>
+              </div>
+
+              {/* Direct Action Links */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <a
+                  href={`https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/authentication/settings`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-2 px-3 rounded-lg bg-[#1A42D9] hover:bg-[#1535B0] text-white text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs text-center"
+                >
+                  <span>Open Firebase Console Settings</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  type="button"
+                  onClick={handleGoogleRedirectAuth}
+                  disabled={loading}
+                  className="py-2 px-3 rounded-lg border border-stone-300 bg-white hover:bg-stone-50 text-stone-800 text-[11px] font-mono font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  title="Try redirect mode if popups are blocked"
+                >
+                  <span>Try Redirect Mode</span>
+                </button>
               </div>
             </div>
           )}
@@ -410,6 +537,74 @@ export const AuthModal: React.FC = () => {
                   </svg>
                   <span>{mode === 'signup' ? 'Sign up with Google' : 'Sign in with Google'}</span>
                 </button>
+
+                {/* Vercel & Domain Authorization Setup Guide Accordion */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowVercelGuide(!showVercelGuide)}
+                    className="w-full text-center text-[11px] font-mono text-stone-500 hover:text-[#1A42D9] flex items-center justify-center gap-1.5 py-1 transition-colors cursor-pointer"
+                  >
+                    <Globe className="w-3.5 h-3.5 text-stone-400" />
+                    <span>Deployed to Vercel? Setup guide & domain whitelist</span>
+                    {showVercelGuide ? <ChevronUp className="w-3 h-3 text-stone-400" /> : <ChevronDown className="w-3 h-3 text-stone-400" />}
+                  </button>
+
+                  {showVercelGuide && (
+                    <div className="mt-2 p-3 bg-[#FAF8F2] border border-[#E5E2D9] rounded-xl text-xs space-y-2.5 animate-in fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-stone-800 text-[11px]">Firebase OAuth Domain Whitelist</span>
+                        <a
+                          href={`https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/authentication/settings`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-mono text-[#1A42D9] hover:underline flex items-center gap-1"
+                        >
+                          <span>Firebase Console</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+
+                      <p className="text-[11px] text-stone-600 leading-relaxed">
+                        By default, Firebase Auth blocks Google OAuth on newly deployed Vercel domains until authorized.
+                      </p>
+
+                      <div className="bg-white p-2 rounded-lg border border-[#E5E2D9] flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[9px] uppercase font-mono text-stone-400">Current Domain</div>
+                          <div className="text-xs font-mono font-semibold text-stone-900 truncate">
+                            {currentHost || 'your-project.vercel.app'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyDomain(currentHost)}
+                          className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 rounded-md text-[10px] font-mono text-stone-700 flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedDomain ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+
+                      <div className="text-[10px] font-mono text-stone-600 space-y-1 bg-white/60 p-2 rounded border border-[#E5E2D9]/60">
+                        <div>1. Go to Firebase Console → <strong>Authentication</strong> → <strong>Settings</strong>.</div>
+                        <div>2. In <strong>Authorized domains</strong>, click <strong>Add domain</strong>.</div>
+                        <div>3. Paste <code className="bg-stone-100 px-1 py-0.5 rounded text-stone-800">{currentHost || 'vercel.app'}</code> or <code className="bg-stone-100 px-1 py-0.5 rounded text-stone-800">vercel.app</code> and click <strong>Save</strong>.</div>
+                      </div>
+
+                      <div className="pt-1 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleGoogleRedirectAuth}
+                          disabled={loading}
+                          className="w-full py-1.5 px-2 rounded-lg border border-[#E5E2D9] bg-white hover:bg-stone-50 text-stone-700 text-[10px] font-mono text-center transition-colors cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <span>Try Google Sign-In with Redirect (Alternative)</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Instant Role Explorer / Guest Fallback */}
                 <div className="pt-2 border-t border-[#EAE7DD]">

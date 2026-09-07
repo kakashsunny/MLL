@@ -25,6 +25,7 @@ import {
   User,
   Code2,
   ShieldCheck,
+  Award,
   Menu,
   X
 } from 'lucide-react';
@@ -56,9 +57,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleMobile
 }) => {
   const { role, user, profile, openAuthModal } = useAuth();
-  const currentXP = user ? (profile?.xp ?? userProgress?.xp ?? 0) : (userProgress?.xp ?? 0);
+  const currentXP = Math.max(userProgress?.xp || 0, profile?.xp || 0);
   const currentLevel = userProgress?.level || 'ML Explorer';
-  const currentStreak = user ? (profile?.streak ?? userProgress?.streakDays ?? 0) : (userProgress?.streakDays ?? 0);
+  const currentStreak = Math.max(userProgress?.streakDays || 0, profile?.streak || 0, 1);
 
   const coreNav: { id: ViewMode; label: string; icon: any; tag?: string }[] = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -74,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const toolsNav: { id: ViewMode; label: string; icon: any; tag?: string }[] = [
     { id: 'syntax', label: 'Syntax Library', icon: BookOpen, tag: 'NEW' },
+    { id: 'certificate', label: 'Certificates', icon: Award, tag: 'PDF/PNG' },
     { id: 'experiments', label: 'Break The Model', icon: Sliders },
     { id: 'tutor', label: 'Ask Forge (AI)', icon: MessageSquareCode, tag: 'Socratic' },
     { id: 'math', label: 'Math Visualizer', icon: Binary },

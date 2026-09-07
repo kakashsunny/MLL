@@ -5,22 +5,30 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult, 
   googleProvider, 
   firebaseSignOut, 
-  signInAnonymously,
-  updateProfile as firebaseUpdateProfile,
-  sendPasswordResetEmail,
+  signInAnonymously, 
+  updateProfile as firebaseUpdateProfile, 
+  sendPasswordResetEmail, 
   syncUserProfile, 
-  fetchUserProfile,
-  updateUserRole,
-  recordSystemAuditLog,
-  testFirestoreConnection,
+  fetchUserProfile, 
+  updateUserRole, 
+  updateUserStats,
+  recordSystemAuditLog, 
+  testFirestoreConnection, 
   UserProfile, 
   UserRole, 
   RolePermissions, 
   ROLE_PERMISSIONS 
 } from '../services/firebase';
 import { User as FirebaseUser } from 'firebase/auth';
+import { 
+  getStoredProgress, 
+  saveUserProgress, 
+  checkAndUpdateDailyStreak 
+} from '../services/storageService';
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -35,37 +43,66 @@ interface AuthContextType {
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   signupWithEmail: (email: string, pass: string, name: string, role?: UserRole) => Promise<void>;
   loginWithGoogle: (role?: UserRole) => Promise<void>;
+  loginWithGoogleRedirect: () => Promise<void>;
   sendResetPasswordEmail: (email: string) => Promise<void>;
   loginAsGuest: (role?: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   changeRole: (newRole: UserRole) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  syncStats: (newXp: number, newStreak: number) => Promise<void>;
 }
 
-const defaultProfile: UserProfile = {
-  id: 'guest_demo',
-  email: 'researcher@neuraforge.ai',
-  displayName: 'Guest Explorer',
-  role: 'researcher',
-  xp: 0,
-  streak: 0,
-  tier: 'ML Explorer',
-  createdAt: new Date().toISOString(),
-  lastLoginAt: new Date().toISOString()
+const getInitialProfile = (): UserProfile => {
+  const local = checkAndUpdateDailyStreak();
+  return {
+    id: 'guest_demo',
+    email: 'researcher@neuraforge.ai',
+    displayName: 'Guest Explorer',
+    role: 'researcher',
+    xp: local.xp || 0,
+    streak: Math.max(local.streakDays || 0, 1),
+    tier: local.level || 'ML Explorer',
+    createdAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString()
+  };
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(defaultProfile);
+  const [profile, setProfile] = useState<UserProfile | null>(getInitialProfile());
   const [loading, setLoading] = useState<boolean>(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
 
-  // Verify Firestore on mount
+  // Verify Firestore and check for OAuth redirect result on mount
   useEffect(() => {
     testFirestoreConnection();
+
+    // Check if user just returned from a Google Redirect authentication (ideal for Vercel/mobile)
+    getRedirectResult(auth)
+      .then(async (cred) => {
+        if (cred && cred.user) {
+          try {
+            const local = checkAndUpdateDailyStreak();
+            const synced = await syncUserProfile(cred.user, undefined, undefined, local.xp, local.streakDays);
+            setProfile(synced);
+            saveUserProgress({
+              ...local,
+              xp: synced.xp,
+              streakDays: synced.streak
+            });
+            recordSystemAuditLog(cred.user.uid, cred.user.email || '', synced.role, 'LOGIN_GOOGLE_REDIRECT', 'Google OAuth redirect authentication completed');
+            setIsAuthModalOpen(false);
+          } catch (e) {
+            console.warn('Redirect profile sync error:', e);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('OAuth redirect check error:', err);
+      });
   }, []);
 
   // Listen to Firebase Auth state
@@ -74,20 +111,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(currentUser);
       if (currentUser) {
         try {
-          const synced = await syncUserProfile(currentUser);
+          const local = checkAndUpdateDailyStreak();
+          const synced = await syncUserProfile(currentUser, undefined, undefined, local.xp, local.streakDays);
           setProfile(synced);
+          saveUserProgress({
+            ...local,
+            xp: synced.xp,
+            streakDays: synced.streak
+          });
         } catch (err) {
           console.warn('Profile sync fallback:', err);
+          const local = checkAndUpdateDailyStreak();
           setProfile({
-            ...defaultProfile,
             id: currentUser.uid,
             email: currentUser.email || 'user@neuraforge.ai',
-            displayName: currentUser.displayName || 'ML Practitioner'
+            displayName: currentUser.displayName || 'ML Practitioner',
+            role: 'researcher',
+            xp: local.xp || 0,
+            streak: Math.max(local.streakDays || 0, 1),
+            tier: local.level || 'ML Explorer',
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString()
           });
         }
       } else {
         // Fallback default state so the app is immediately exploratory
-        setProfile(defaultProfile);
+        setProfile(getInitialProfile());
       }
       setLoading(false);
     });
@@ -147,6 +196,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogleRedirect = async () => {
+    setLoading(true);
+    try {
+      await signInWithRedirect(auth, googleProvider);
+    } catch (err: any) {
+      console.warn('Google redirect sign-in attempt:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sendResetPasswordEmail = async (emailToReset: string) => {
     setLoading(true);
     try {
@@ -171,7 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       // Local demo fallback if network is restricted
       setProfile({
-        ...defaultProfile,
+        ...getInitialProfile(),
         id: `guest_${Date.now()}`,
         displayName: `Guest ${role.charAt(0).toUpperCase() + role.slice(1)}`,
         role
@@ -189,10 +250,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         recordSystemAuditLog(user.uid, user.email || 'user', profile?.role || 'student', 'LOGOUT', 'User signed out');
       }
       await firebaseSignOut(auth);
-      setProfile(defaultProfile);
+      setProfile(getInitialProfile());
     } catch (e) {
       console.warn('Logout warning:', e);
-      setProfile(defaultProfile);
+      setProfile(getInitialProfile());
     } finally {
       setLoading(false);
     }
@@ -219,6 +280,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const syncStats = async (newXp: number, newStreak: number) => {
+    setProfile(prev => prev ? {
+      ...prev,
+      xp: newXp,
+      streak: newStreak,
+      tier: newXp >= 18000 ? 'Deep Learning Engineer' : newXp >= 12000 ? 'Algorithm Architect' : newXp >= 6000 ? 'Model Builder' : 'ML Explorer'
+    } : null);
+
+    if (user && !user.isAnonymous) {
+      try {
+        await updateUserStats(user.uid, newXp, newStreak);
+      } catch (err) {
+        console.warn('Stats sync to Firestore notice:', err);
+      }
+    }
+  };
+
   const activeRole: UserRole = profile?.role || 'student';
   const permissions = ROLE_PERMISSIONS[activeRole];
 
@@ -237,11 +315,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithEmail,
         signupWithEmail,
         loginWithGoogle,
+        loginWithGoogleRedirect,
         sendResetPasswordEmail,
         loginAsGuest,
         logout,
         changeRole,
-        refreshProfile
+        refreshProfile,
+        syncStats
       }}
     >
       {children}

@@ -46,8 +46,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const streak = user ? (profile?.streak ?? userProgress?.streakDays ?? 0) : (userProgress?.streakDays ?? 0);
-  const xp = user ? (profile?.xp ?? userProgress?.xp ?? 0) : (userProgress?.xp ?? 0);
+  const streak = Math.max(userProgress?.streakDays || 0, profile?.streak || 0, 1);
+  const xp = Math.max(userProgress?.xp || 0, profile?.xp || 0);
 
   // Close user dropdown when clicking outside
   useEffect(() => {

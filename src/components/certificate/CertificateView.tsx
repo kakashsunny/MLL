@@ -1,6 +1,24 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { UserProgress, ViewMode } from '../../types';
-import { getStoredProfile } from '../../services/storageService';
+import { 
+  getStoredProfile, 
+  recordQuizCompletion, 
+  recordCodingCompletion, 
+  recordDebuggingCompletion, 
+  claimCertificateRecord,
+  saveProgress 
+} from '../../services/storageService';
+import { useAuth } from '../../contexts/AuthContext';
+import { 
+  QUIZ_ASSESSMENTS, 
+  CODING_ASSESSMENTS, 
+  DEBUGGING_ASSESSMENTS 
+} from '../../data/assessmentData';
+import { 
+  evaluateCodingChallenge, 
+  evaluateDebuggingChallenge, 
+  EvaluationResult 
+} from '../../utils/assessmentEvaluator';
 import { 
   Award, 
   Printer, 
@@ -11,12 +29,19 @@ import {
   Copy, 
   Check, 
   ShieldCheck, 
-  ExternalLink,
-  BookOpen,
-  Share2,
-  Lock,
-  Unlock,
-  QrCode
+  Lock, 
+  Unlock, 
+  AlertCircle,
+  HelpCircle,
+  RotateCcw,
+  Play,
+  FileCode2,
+  Bug,
+  BrainCircuit,
+  ArrowRight,
+  ChevronRight,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -24,47 +49,234 @@ interface CertificateViewProps {
   userProgress: UserProgress;
   onSelectView?: (view: ViewMode) => void;
   onUpdateXP?: (amount: number) => void;
+  onProgressUpdate?: (progress: UserProgress) => void;
 }
+
+type TabMode = 'dashboard' | 'quiz' | 'coding' | 'debugging' | 'certificate';
 
 export const CertificateView: React.FC<CertificateViewProps> = ({
   userProgress,
   onSelectView,
-  onUpdateXP
+  onUpdateXP,
+  onProgressUpdate
 }) => {
+  const { user, profile: authProfile } = useAuth();
   const profile = getStoredProfile();
-  
-  // Customization State
-  const [recipientName, setRecipientName] = useState(profile.name || 'ML Practitioner');
-  const [specialization, setSpecialization] = useState('Machine Learning & First-Principles Engineering');
-  const [credentialId] = useState(() => `NF-2026-ML-${Math.floor(1000 + Math.random() * 9000)}`);
+
+  const [activeTab, setActiveTab] = useState<TabMode>('dashboard');
+
+  // Customization & Credential State
+  const [recipientName, setRecipientName] = useState(
+    user?.displayName || authProfile?.displayName || profile.name || 'ML Practitioner'
+  );
+  const courseName = 'Machine Learning & First-Principles Engineering';
   const [issueDate, setIssueDate] = useState(() => {
-    const d = new Date();
-    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    if (userProgress.certificateClaimedAt) {
+      return new Date(userProgress.certificateClaimedAt).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
+    return new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   });
 
-  // Fast-track demo unlock toggle so user can test and export immediately
-  const [demoUnlocked, setDemoUnlocked] = useState(false);
+  const [credentialId, setCredentialId] = useState<string>(() => {
+    return userProgress.certificateId || `SO-ML-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+  });
+
   const [copiedLink, setCopiedLink] = useState(false);
   const [isExportingPng, setIsExportingPng] = useState(false);
-
   const certRef = useRef<HTMLDivElement>(null);
 
-  // Completion calculation
-  const completedQuizzesCount = userProgress.completedQuizzes?.length || 0;
-  const completedLessonsCount = userProgress.completedLessons?.length || 0;
-  const completedChallengesCount = userProgress.completedChallenges?.length || 0;
-  
-  // Requirements: at least 1 challenge or quiz or lesson, or demoUnlocked
-  const isEligible = demoUnlocked || completedQuizzesCount >= 1 || completedLessonsCount >= 3 || completedChallengesCount >= 1 || (userProgress.xp || 0) >= 500;
-  const isFullyHonored = demoUnlocked || (completedLessonsCount >= 5 && completedQuizzesCount >= 3);
+  // Stage 1: Quiz State
+  const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
+  const [selectedQuizOption, setSelectedQuizOption] = useState<number | null>(null);
+  const [isQuizAnswered, setIsQuizAnswered] = useState(false);
 
-  // Handle Printable PDF
+  // Stage 2: Coding State
+  const [currentCodingIdx, setCurrentCodingIdx] = useState(0);
+  const [codingCode, setCodingCode] = useState(CODING_ASSESSMENTS[0]?.starterCode || '');
+  const [codingEvalResult, setCodingEvalResult] = useState<EvaluationResult | null>(null);
+  const [isEvaluatingCoding, setIsEvaluatingCoding] = useState(false);
+  const [showCodingHint, setShowCodingHint] = useState(false);
+
+  // Stage 3: Debugging State
+  const [currentDebuggingIdx, setCurrentDebuggingIdx] = useState(0);
+  const [debuggingCode, setDebuggingCode] = useState(DEBUGGING_ASSESSMENTS[0]?.brokenCode || '');
+  const [debuggingEvalResult, setDebuggingEvalResult] = useState<EvaluationResult | null>(null);
+  const [isEvaluatingDebugging, setIsEvaluatingDebugging] = useState(false);
+  const [showDebuggingHint, setShowDebuggingHint] = useState(false);
+
+  // Synchronize code when changing challenge index
+  useEffect(() => {
+    const c = CODING_ASSESSMENTS[currentCodingIdx];
+    if (c) {
+      setCodingCode(c.starterCode);
+      setCodingEvalResult(null);
+      setShowCodingHint(false);
+    }
+  }, [currentCodingIdx]);
+
+  useEffect(() => {
+    const d = DEBUGGING_ASSESSMENTS[currentDebuggingIdx];
+    if (d) {
+      setDebuggingCode(d.brokenCode);
+      setDebuggingEvalResult(null);
+      setShowDebuggingHint(false);
+    }
+  }, [currentDebuggingIdx]);
+
+  // Assessment Progress Calculations (Strict 20 / 20 / 20)
+  const completedQuizzes = userProgress.completedQuizzes || [];
+  const completedCoding = userProgress.completedCodingChallenges || [];
+  const completedDebugging = userProgress.completedDebuggingChallenges || [];
+
+  // Deduplicated counts out of 20
+  const quizCount = Math.min(20, completedQuizzes.filter(id => id.startsWith('quiz_')).length);
+  const codingCount = Math.min(20, completedCoding.filter(id => id.startsWith('code_')).length);
+  const debuggingCount = Math.min(20, completedDebugging.filter(id => id.startsWith('debug_')).length);
+
+  // Strict Eligibility Rule: ALL THREE MUST BE EXACTLY 20/20
+  const isEligible = quizCount >= 20 && codingCount >= 20 && debuggingCount >= 20;
+  const isClaimed = !!userProgress.certificateClaimed;
+
+  // Percentage calculations
+  const quizPercent = Math.round((quizCount / 20) * 100);
+  const codingPercent = Math.round((codingCount / 20) * 100);
+  const debuggingPercent = Math.round((debuggingCount / 20) * 100);
+
+  // ASCII Progress bar generator
+  const renderProgressBar = (count: number, total: number = 20) => {
+    const filledBlocks = Math.round((count / total) * 16);
+    const emptyBlocks = 16 - filledBlocks;
+    return '█'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
+  };
+
+  // --------------------------------------------------------------------------
+  // Quiz Handlers
+  // --------------------------------------------------------------------------
+  const currentQuiz = QUIZ_ASSESSMENTS[currentQuizIdx] || QUIZ_ASSESSMENTS[0];
+  const isCurrentQuizCompleted = completedQuizzes.includes(currentQuiz.id);
+
+  const handleSelectQuizOption = (optionIdx: number) => {
+    if (isQuizAnswered) return;
+    setSelectedQuizOption(optionIdx);
+    setIsQuizAnswered(true);
+
+    const isCorrect = optionIdx === currentQuiz.correctAnswer;
+    const updated = recordQuizCompletion(currentQuiz.id, isCorrect, isCorrect ? 100 : 0, currentQuiz.xpReward);
+    
+    if (onProgressUpdate) onProgressUpdate(updated);
+    if (onUpdateXP && isCorrect) onUpdateXP(currentQuiz.xpReward);
+
+    if (isCorrect) {
+      try {
+        confetti({ particleCount: 35, spread: 45 });
+      } catch (e) {}
+    }
+  };
+
+  const handleNextQuiz = () => {
+    if (currentQuizIdx < QUIZ_ASSESSMENTS.length - 1) {
+      setCurrentQuizIdx(i => i + 1);
+      setSelectedQuizOption(null);
+      setIsQuizAnswered(false);
+    }
+  };
+
+  const handlePrevQuiz = () => {
+    if (currentQuizIdx > 0) {
+      setCurrentQuizIdx(i => i - 1);
+      setSelectedQuizOption(null);
+      setIsQuizAnswered(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // Coding Challenge Handlers
+  // --------------------------------------------------------------------------
+  const currentCoding = CODING_ASSESSMENTS[currentCodingIdx] || CODING_ASSESSMENTS[0];
+  const isCurrentCodingCompleted = completedCoding.includes(currentCoding.id);
+
+  const handleRunCodingEvaluation = async () => {
+    setIsEvaluatingCoding(true);
+    try {
+      const result = await evaluateCodingChallenge(currentCoding.id, codingCode);
+      setCodingEvalResult(result);
+
+      if (result.passed) {
+        const updated = recordCodingCompletion(currentCoding.id, currentCoding.xpReward);
+        if (onProgressUpdate) onProgressUpdate(updated);
+        if (onUpdateXP) onUpdateXP(currentCoding.xpReward);
+        try {
+          confetti({ particleCount: 50, spread: 60 });
+        } catch (e) {}
+      }
+    } finally {
+      setIsEvaluatingCoding(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // Debugging Challenge Handlers
+  // --------------------------------------------------------------------------
+  const currentDebugging = DEBUGGING_ASSESSMENTS[currentDebuggingIdx] || DEBUGGING_ASSESSMENTS[0];
+  const isCurrentDebuggingCompleted = completedDebugging.includes(currentDebugging.id);
+
+  const handleRunDebuggingEvaluation = async () => {
+    setIsEvaluatingDebugging(true);
+    try {
+      const result = await evaluateDebuggingChallenge(currentDebugging.id, debuggingCode);
+      setDebuggingEvalResult(result);
+
+      if (result.passed) {
+        const updated = recordDebuggingCompletion(currentDebugging.id, currentDebugging.xpReward);
+        if (onProgressUpdate) onProgressUpdate(updated);
+        if (onUpdateXP) onUpdateXP(currentDebugging.xpReward);
+        try {
+          confetti({ particleCount: 50, spread: 60 });
+        } catch (e) {}
+      }
+    } finally {
+      setIsEvaluatingDebugging(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // Claim Certificate Handler
+  // --------------------------------------------------------------------------
+  const handleClaimCertificate = () => {
+    if (!isEligible) return;
+
+    const generatedId = `SO-ML-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+    setCredentialId(generatedId);
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    setIssueDate(currentDate);
+
+    const updated = claimCertificateRecord(generatedId);
+    if (onProgressUpdate) onProgressUpdate(updated);
+    if (onUpdateXP) onUpdateXP(1000); // 1,000 XP Capstone Completion Reward
+
+    try {
+      confetti({ particleCount: 120, spread: 90 });
+    } catch (e) {}
+  };
+
+  // --------------------------------------------------------------------------
+  // Certificate Export (PNG & PDF)
+  // --------------------------------------------------------------------------
   const handlePrint = () => {
+    if (!isEligible || !isClaimed) return;
     window.print();
   };
 
-  // Handle High-DPI PNG Canvas Generation
   const handleDownloadPng = async () => {
+    if (!isEligible || !isClaimed) return;
     setIsExportingPng(true);
     try {
       const width = 2400;
@@ -75,11 +287,11 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // 1. Background Parchment Fill
+      // 1. Background Fill
       ctx.fillStyle = '#FAF8F2';
       ctx.fillRect(0, 0, width, height);
 
-      // Subtle textured border
+      // Subtle textured parchment border
       ctx.fillStyle = '#F3EFE6';
       ctx.fillRect(40, 40, width - 80, height - 80);
       ctx.fillStyle = '#FFFFFF';
@@ -100,8 +312,8 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
       ctx.lineWidth = 2;
       ctx.strokeRect(120, 120, width - 240, height - 240);
 
-      // Corner Corner Rosettes / Marks
-      const drawCornerBracket = (x: number, y: number, angle: number) => {
+      // Corner Brackets
+      const drawCorner = (x: number, y: number, angle: number) => {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
@@ -115,22 +327,22 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
         ctx.stroke();
         ctx.restore();
       };
-      drawCornerBracket(104, 104, 0);
-      drawCornerBracket(width - 104, 104, 0);
-      drawCornerBracket(104, height - 104, 0);
-      drawCornerBracket(width - 104, height - 104, 0);
+      drawCorner(104, 104, 0);
+      drawCorner(width - 104, 104, 0);
+      drawCorner(104, height - 104, 0);
+      drawCorner(width - 104, height - 104, 0);
 
-      // 3. Institution Header
+      // 3. Organization Header (Strictly Sunny Organization)
       ctx.textAlign = 'center';
       ctx.fillStyle = '#1A42D9';
       ctx.font = 'bold 36px "JetBrains Mono", monospace';
-      ctx.fillText('NEURAFORGE RESEARCH INSTITUTE OF MACHINE LEARNING', width / 2, 230);
+      ctx.fillText('SUNNY ORGANIZATION', width / 2, 230);
 
       ctx.fillStyle = '#666666';
-      ctx.font = '500 24px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText('DEPARTMENT OF FIRST-PRINCIPLES ARTIFICIAL INTELLIGENCE & EMPIRICAL SYSTEMS', width / 2, 275);
+      ctx.font = '500 22px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText('ACADEMIC & FIRST-PRINCIPLES ARTIFICIAL INTELLIGENCE DIVISION', width / 2, 275);
 
-      // Horizontal Divider
+      // Divider Line
       ctx.strokeStyle = '#111111';
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -138,7 +350,7 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
       ctx.lineTo(width / 2 + 350, 315);
       ctx.stroke();
 
-      // Small Emblem Diamond in Divider
+      // Center Diamond
       ctx.fillStyle = '#1A42D9';
       ctx.beginPath();
       ctx.arc(width / 2, 315, 8, 0, Math.PI * 2);
@@ -146,152 +358,111 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
 
       // 4. Certificate Title
       ctx.fillStyle = '#111111';
-      ctx.font = '900 78px "Newsreader", serif';
-      ctx.fillText('CERTIFICATE OF MASTERY', width / 2, 430);
+      ctx.font = '900 68px "Newsreader", serif';
+      ctx.fillText('Certificate of Completion', width / 2, 430);
 
-      ctx.fillStyle = '#444444';
-      ctx.font = 'italic 32px "Newsreader", serif';
-      ctx.fillText('This official credential affirms that', width / 2, 510);
+      ctx.fillStyle = '#555555';
+      ctx.font = 'italic 28px "Newsreader", serif';
+      ctx.fillText('This certificate is proudly presented to', width / 2, 510);
 
-      // 5. Recipient Name
+      // 5. Learner Name
       ctx.fillStyle = '#111111';
-      ctx.font = 'bold 96px "Newsreader", serif';
-      ctx.fillText(recipientName.toUpperCase(), width / 2, 635);
+      ctx.font = '900 76px "Newsreader", serif';
+      const upperName = (recipientName || 'LEARNER').toUpperCase();
+      ctx.fillText(upperName, width / 2, 630);
 
-      // Underline under Name
+      // Underline
+      const textWidth = ctx.measureText(upperName).width;
       ctx.strokeStyle = '#1A42D9';
       ctx.lineWidth = 4;
-      const nameWidth = ctx.measureText(recipientName.toUpperCase()).width;
       ctx.beginPath();
-      ctx.moveTo(width / 2 - nameWidth / 2 - 40, 665);
-      ctx.lineTo(width / 2 + nameWidth / 2 + 40, 665);
+      ctx.moveTo(width / 2 - textWidth / 2 - 20, 655);
+      ctx.lineTo(width / 2 + textWidth / 2 + 20, 655);
       ctx.stroke();
 
-      // 6. Citation Statement
-      ctx.fillStyle = '#333333';
-      ctx.font = '400 30px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText('has successfully demonstrated empirical execution and theoretical rigor in the discipline of', width / 2, 735);
+      // 6. Course & Assessment Achievement Statement
+      ctx.fillStyle = '#555555';
+      ctx.font = '400 28px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText('for successfully completing the', width / 2, 740);
 
       ctx.fillStyle = '#1A42D9';
       ctx.font = 'bold 44px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText(specialization, width / 2, 805);
+      ctx.fillText(courseName, width / 2, 810);
 
-      ctx.fillStyle = '#555555';
-      ctx.font = '400 24px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText('Formulating closed-form solutions, loss function curvature, backpropagation dynamics, and production pipelines.', width / 2, 855);
+      ctx.fillStyle = '#333333';
+      ctx.font = '500 26px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText('and successfully completing all required assessments:', width / 2, 880);
 
-      // 7. Five Core Competencies Grid
-      const competencies = [
-        'Ordinary Least Squares & Normal Equations',
-        'Stochastic Gradient Descent & Convexity',
-        'Voronoi Tessellation & Distance Metrics',
-        'Recursive Gini Partitioning & Trees',
-        'Tensor Calculus & Backprop Optimization'
+      // 7. Three Assessment Badges
+      const badgeY = 960;
+      const badges = [
+        '✓  20 Quiz Challenges',
+        '✓  20 Coding Challenges',
+        '✓  20 Debugging Challenges'
       ];
-      const startY = 930;
-      ctx.font = 'bold 20px "JetBrains Mono", monospace';
-      competencies.forEach((comp, idx) => {
-        const col = idx % 2 === 0 ? width / 2 - 450 : width / 2 + 100;
-        const rowY = startY + Math.floor(idx / 2) * 45;
-        if (idx === 4) {
-          // Center the 5th item
-          ctx.fillStyle = '#1A42D9';
-          ctx.fillText('✓  ' + comp, width / 2 - 180, startY + 95);
-        } else {
-          ctx.fillStyle = '#111111';
-          ctx.fillText('✓  ' + comp, col, rowY);
-        }
+      const spacing = 480;
+      const startX = width / 2 - spacing;
+
+      badges.forEach((b, i) => {
+        const bx = startX + i * spacing;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth = 2;
+        ctx.fillRect(bx - 200, badgeY - 35, 400, 60);
+        ctx.strokeRect(bx - 200, badgeY - 35, 400, 60);
+
+        ctx.fillStyle = '#111111';
+        ctx.font = 'bold 22px "JetBrains Mono", monospace';
+        ctx.fillText(b, bx, badgeY + 5);
       });
 
-      // 8. Signatures & Verified Seal (Bottom Area)
+      // 8. Signatures & Issuer (K AKASH — Founder, Sunny Organization)
       const bottomY = 1260;
 
-      // Left Signature: Research Fellow
-      ctx.textAlign = 'left';
+      // Sole Issuer: K AKASH
+      ctx.textAlign = 'center';
       ctx.fillStyle = '#111111';
-      ctx.font = 'italic 38px "Newsreader", serif';
-      ctx.fillText('Dr. Elena Rostova', 300, bottomY);
-      ctx.strokeStyle = '#111111';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(300, bottomY + 15);
-      ctx.lineTo(650, bottomY + 15);
-      ctx.stroke();
-      ctx.font = 'bold 18px "JetBrains Mono", monospace';
-      ctx.fillStyle = '#666666';
-      ctx.fillText('DR. ELENA ROSTOVA', 300, bottomY + 45);
-      ctx.font = '400 16px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText('Chief Fellow, Theoretical Intelligence', 300, bottomY + 70);
+      ctx.font = 'italic bold 44px "Newsreader", serif';
+      ctx.fillText('K Akash', width / 2, bottomY);
 
-      // Right Signature: Director of Systems
-      ctx.textAlign = 'left';
+      ctx.strokeStyle = '#111111';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(width / 2 - 250, bottomY + 20);
+      ctx.lineTo(width / 2 + 250, bottomY + 20);
+      ctx.stroke();
+
+      ctx.font = 'bold 24px "JetBrains Mono", monospace';
       ctx.fillStyle = '#111111';
-      ctx.font = 'italic 38px "Newsreader", serif';
-      ctx.fillText('Marcus Vance', width - 650, bottomY);
-      ctx.strokeStyle = '#111111';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(width - 650, bottomY + 15);
-      ctx.lineTo(width - 300, bottomY + 15);
-      ctx.stroke();
-      ctx.font = 'bold 18px "JetBrains Mono", monospace';
-      ctx.fillStyle = '#666666';
-      ctx.fillText('MARCUS VANCE', width - 650, bottomY + 45);
-      ctx.font = '400 16px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText('Director, Applied ML Systems Lab', width - 650, bottomY + 70);
+      ctx.fillText('K AKASH', width / 2, bottomY + 60);
 
-      // Center Official Seal Emblem
-      ctx.save();
-      ctx.translate(width / 2, bottomY + 20);
-      // Gold outer ring
-      ctx.beginPath();
-      ctx.arc(0, 0, 80, 0, Math.PI * 2);
-      ctx.fillStyle = '#D97706';
-      ctx.fill();
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#B45309';
-      ctx.stroke();
-
-      // Inner navy ring
-      ctx.beginPath();
-      ctx.arc(0, 0, 70, 0, Math.PI * 2);
+      ctx.font = 'bold 20px "Plus Jakarta Sans", sans-serif';
       ctx.fillStyle = '#1A42D9';
-      ctx.fill();
+      ctx.fillText('Founder', width / 2, bottomY + 95);
 
-      // Seal text
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 15px "JetBrains Mono", monospace';
-      ctx.fillText('NEURAFORGE', 0, -25);
-      ctx.font = 'bold 24px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText('★ 2026 ★', 0, 5);
-      ctx.font = 'bold 13px "JetBrains Mono", monospace';
-      ctx.fillText('VERIFIED', 0, 30);
-      ctx.restore();
+      ctx.font = '500 20px "Plus Jakarta Sans", sans-serif';
+      ctx.fillStyle = '#444444';
+      ctx.fillText('Sunny Organization', width / 2, bottomY + 130);
 
-      // 9. Bottom Footer Bar: Credential ID, Verification URL & Date
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#888888';
-      ctx.font = 'bold 16px "JetBrains Mono", monospace';
-      ctx.fillText(`CREDENTIAL ID: ${credentialId}   •   ISSUED: ${issueDate.toUpperCase()}   •   VERIFY: neuraforge.ai/credentials`, width / 2, 1480);
+      // Left: Verification Credential ID
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 18px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#666666';
+      ctx.fillText(`CREDENTIAL ID: ${credentialId}`, 180, 1480);
+      ctx.fillText(`STATUS: VERIFIED ACADEMIC ACCREDITATION`, 180, 1515);
 
-      // Convert to blob and download
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const safeName = recipientName.replace(/[^a-zA-Z0-9]/g, '_');
-        a.download = `NeuraForge_Machine_Learning_Certificate_${safeName}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        setIsExportingPng(false);
-        try {
-          confetti({ particleCount: 60, spread: 70 });
-        } catch (e) {}
-      }, 'image/png');
+      // Right: Issue Date
+      ctx.textAlign = 'right';
+      ctx.fillText(`DATE OF ISSUANCE: ${issueDate}`, width - 180, 1480);
+      ctx.fillText(`ISSUED BY: K AKASH — Founder, Sunny Organization`, width - 180, 1515);
+
+      // Trigger Download
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = `Certificate_${upperName.replace(/\s+/g, '_')}_SunnyOrg.png`;
+      link.href = dataUrl;
+      link.click();
+      setIsExportingPng(false);
     } catch (err) {
       console.error('PNG export failed', err);
       setIsExportingPng(false);
@@ -299,17 +470,10 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
   };
 
   const handleCopyShareLink = () => {
-    navigator.clipboard.writeText(`https://neuraforge.ai/credentials/${credentialId}`);
+    if (!isEligible || !isClaimed) return;
+    navigator.clipboard.writeText(`https://sunnyorg.com/credentials/${credentialId}`);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
-  };
-
-  const handleUnlockDemo = () => {
-    setDemoUnlocked(true);
-    if (onUpdateXP) onUpdateXP(500);
-    try {
-      confetti({ particleCount: 70, spread: 80 });
-    } catch (e) {}
   };
 
   return (
@@ -348,34 +512,39 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
         }
       `}</style>
 
-      {/* 1. Header & Back Bar (Hidden on Print) */}
-      <div className="max-w-6xl mx-auto mb-8 no-print">
+      {/* 1. Header Bar */}
+      <div className="max-w-6xl mx-auto mb-6 no-print">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E2D9] pb-6">
           <div className="flex items-center gap-3">
             <button
               onClick={() => onSelectView?.('dashboard')}
-              className="p-2 bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none text-[#111111] transition-all cursor-pointer"
+              className="p-2.5 bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 text-[#111111] transition-all cursor-pointer"
               title="Return to Dashboard"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <div className="text-[10px] font-mono uppercase text-stone-400 font-bold tracking-widest flex items-center gap-1.5">
+              <div className="text-[10px] font-mono uppercase text-stone-500 font-bold tracking-widest flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#1A42D9]" />
-                <span>NeuraForge Accreditation System</span>
+                <span>Sunny Organization Accreditation</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-[#111111] tracking-tight">
-                Official Certificate of Mastery
+                Machine Learning Certification Hub
               </h1>
             </div>
           </div>
 
-          {/* Export Actions */}
+          {/* Top Actions */}
           <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={handlePrint}
-              className="px-4 py-2.5 rounded-none bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none font-mono text-xs font-bold text-[#111111] flex items-center gap-2 transition-all cursor-pointer"
-              title="Print to PDF (Landscape)"
+              disabled={!isEligible || !isClaimed}
+              className={`px-4 py-2.5 font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] flex items-center gap-2 transition-all cursor-pointer ${
+                isEligible && isClaimed 
+                  ? 'bg-white hover:bg-stone-50 text-[#111111]' 
+                  : 'bg-stone-200 text-stone-400 border-stone-300 cursor-not-allowed shadow-none'
+              }`}
+              title={isEligible && isClaimed ? "Print Official Certificate" : "Locked: Complete all 3 assessments to unlock"}
             >
               <Printer className="w-4 h-4 text-[#1A42D9]" />
               <span>PRINT / PDF</span>
@@ -383,9 +552,13 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
 
             <button
               onClick={handleDownloadPng}
-              disabled={isExportingPng}
-              className="px-5 py-2.5 rounded-none bg-[#111111] hover:bg-[#1A42D9] border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none font-mono text-xs font-bold text-white flex items-center gap-2 transition-all cursor-pointer"
-              title="Export High-Res 2400x1600 PNG"
+              disabled={!isEligible || !isClaimed || isExportingPng}
+              className={`px-5 py-2.5 font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] flex items-center gap-2 transition-all cursor-pointer ${
+                isEligible && isClaimed 
+                  ? 'bg-[#111111] hover:bg-[#1A42D9] text-white' 
+                  : 'bg-stone-200 text-stone-400 border-stone-300 cursor-not-allowed shadow-none'
+              }`}
+              title={isEligible && isClaimed ? "Download High-Res 2400x1600 PNG" : "Locked: Complete all 3 assessments to unlock"}
             >
               <Download className="w-4 h-4" />
               <span>{isExportingPng ? 'RENDERING PNG...' : 'DOWNLOAD PNG'}</span>
@@ -393,276 +566,1076 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
 
             <button
               onClick={handleCopyShareLink}
-              className="px-3.5 py-2.5 rounded-none bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none font-mono text-xs font-bold text-[#111111] flex items-center gap-1.5 transition-all cursor-pointer"
-              title="Copy verification URL"
+              disabled={!isEligible || !isClaimed}
+              className={`px-3.5 py-2.5 font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] flex items-center gap-1.5 transition-all cursor-pointer ${
+                isEligible && isClaimed 
+                  ? 'bg-white hover:bg-stone-50 text-[#111111]' 
+                  : 'bg-stone-200 text-stone-400 border-stone-300 cursor-not-allowed shadow-none'
+              }`}
             >
               {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-stone-500" />}
               <span className="hidden sm:inline">{copiedLink ? 'COPIED!' : 'SHARE'}</span>
             </button>
           </div>
         </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2 border-b border-[#E5E2D9]">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`px-4 py-2 font-mono text-xs font-bold border-[2px] border-[#111111] transition-all cursor-pointer ${
+              activeTab === 'dashboard'
+                ? 'bg-[#111111] text-white shadow-[2px_2px_0px_0px_#111111]'
+                : 'bg-white text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            OVERVIEW & PROGRESS
+          </button>
+
+          <button
+            onClick={() => setActiveTab('quiz')}
+            className={`px-4 py-2 font-mono text-xs font-bold border-[2px] border-[#111111] transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'quiz'
+                ? 'bg-[#111111] text-white shadow-[2px_2px_0px_0px_#111111]'
+                : 'bg-white text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            <BrainCircuit className="w-3.5 h-3.5" />
+            <span>1. QUIZ CHALLENGE ({quizCount}/20)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('coding')}
+            className={`px-4 py-2 font-mono text-xs font-bold border-[2px] border-[#111111] transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'coding'
+                ? 'bg-[#111111] text-white shadow-[2px_2px_0px_0px_#111111]'
+                : 'bg-white text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            <FileCode2 className="w-3.5 h-3.5" />
+            <span>2. CODING CHALLENGE ({codingCount}/20)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('debugging')}
+            className={`px-4 py-2 font-mono text-xs font-bold border-[2px] border-[#111111] transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'debugging'
+                ? 'bg-[#111111] text-white shadow-[2px_2px_0px_0px_#111111]'
+                : 'bg-white text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            <Bug className="w-3.5 h-3.5" />
+            <span>3. DEBUGGING CHALLENGE ({debuggingCount}/20)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('certificate')}
+            className={`px-4 py-2 font-mono text-xs font-bold border-[2px] border-[#111111] transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'certificate'
+                ? 'bg-[#1A42D9] text-white shadow-[2px_2px_0px_0px_#111111]'
+                : isEligible 
+                  ? 'bg-amber-100 text-amber-900 hover:bg-amber-200' 
+                  : 'bg-white text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            {isEligible ? <Unlock className="w-3.5 h-3.5 text-emerald-600" /> : <Lock className="w-3.5 h-3.5 text-amber-600" />}
+            <span>CERTIFICATE {isEligible ? (isClaimed ? '✓ READY' : '★ CLAIM') : '🔒 LOCKED'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* 2. Overview Status & Customization Panel (Hidden on Print) */}
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8 no-print">
-        
-        {/* Left Card: Progress Verification Checklist */}
-        <div className="lg:col-span-6 bg-white border-[3px] border-[#111111] shadow-[5px_5px_0px_0px_#111111] rounded-none p-6">
-          <div className="flex items-center justify-between border-b-[2px] border-[#111111] pb-3 mb-4">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 bg-[#1A42D9] border border-[#111111]" />
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#111111]">
-                Competency Verification Status
-              </span>
+      {/* ==================================================================== */}
+      {/* TAB 1: DASHBOARD & OVERVIEW                                           */}
+      {/* ==================================================================== */}
+      {activeTab === 'dashboard' && (
+        <div className="max-w-6xl mx-auto space-y-6 no-print">
+          
+          {/* THE SPECIFIED ASSESSMENT PROGRESS DASHBOARD */}
+          <div className="bg-white border-[3px] border-[#111111] shadow-[5px_5px_0px_0px_#111111] p-6 sm:p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-[2px] border-[#111111] pb-4 mb-6 gap-3">
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-widest text-stone-500 font-bold">
+                  Sunny Organization Official Accreditation Protocol
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-[#111111] tracking-tight">
+                  ASSESSMENT PROGRESS
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 font-mono text-xs font-bold border-[2px] border-[#111111] flex items-center gap-1.5 ${
+                  isEligible 
+                    ? 'bg-emerald-100 text-emerald-900 border-emerald-800' 
+                    : 'bg-amber-100 text-amber-900 border-amber-800'
+                }`}>
+                  {isEligible ? <CheckCircle2 className="w-4 h-4 text-emerald-700" /> : <Lock className="w-4 h-4 text-amber-700" />}
+                  <span>{isEligible ? (isClaimed ? 'CERTIFICATE: UNLOCKED & ISSUED' : 'CERTIFICATE: UNLOCKED (CLAIM PENDING)') : 'CERTIFICATE: LOCKED'}</span>
+                </span>
+              </div>
             </div>
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 border border-[#111111] ${
-              isEligible ? 'bg-emerald-50 text-emerald-900 border-emerald-700' : 'bg-amber-50 text-amber-900'
-            }`}>
-              {isEligible ? 'ACCREDITED & UNLOCKED' : 'IN PROGRESS'}
-            </span>
+
+            {/* ASCII & Graphical Representation */}
+            <div className="bg-[#FAF8F2] border-[2px] border-[#111111] p-5 sm:p-6 font-mono text-xs sm:text-sm space-y-5">
+              
+              {/* Stage 1: Quiz */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center font-bold">
+                  <span className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 bg-[#1A42D9] border border-[#111111]" />
+                    <span>Quiz</span>
+                  </span>
+                  <span className="text-[#1A42D9]">
+                    {quizCount >= 20 ? '✓ 20/20' : `${quizCount}/20 (${quizPercent}%)`}
+                  </span>
+                </div>
+                <div className="text-stone-800 text-sm sm:text-base tracking-wider overflow-x-auto whitespace-pre font-bold select-none">
+                  {renderProgressBar(quizCount, 20)} <span className="text-xs text-stone-600">{quizCount}/20</span>
+                </div>
+              </div>
+
+              {/* Stage 2: Coding */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center font-bold">
+                  <span className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 bg-[#D97706] border border-[#111111]" />
+                    <span>Coding</span>
+                  </span>
+                  <span className="text-[#D97706]">
+                    {codingCount >= 20 ? '✓ 20/20' : `${codingCount}/20 (${codingPercent}%)`}
+                  </span>
+                </div>
+                <div className="text-stone-800 text-sm sm:text-base tracking-wider overflow-x-auto whitespace-pre font-bold select-none">
+                  {renderProgressBar(codingCount, 20)} <span className="text-xs text-stone-600">{codingCount}/20</span>
+                </div>
+              </div>
+
+              {/* Stage 3: Debugging */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center font-bold">
+                  <span className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 bg-rose-600 border border-[#111111]" />
+                    <span>Debugging</span>
+                  </span>
+                  <span className="text-rose-700">
+                    {debuggingCount >= 20 ? '✓ 20/20' : `${debuggingCount}/20 (${debuggingPercent}%)`}
+                  </span>
+                </div>
+                <div className="text-stone-800 text-sm sm:text-base tracking-wider overflow-x-auto whitespace-pre font-bold select-none">
+                  {renderProgressBar(debuggingCount, 20)} <span className="text-xs text-stone-600">{debuggingCount}/20</span>
+                </div>
+              </div>
+
+              {/* Certificate Summary */}
+              <div className="pt-3 border-t border-stone-300 flex justify-between items-center font-bold text-sm">
+                <span>Certificate</span>
+                <span className={isEligible ? 'text-emerald-700' : 'text-amber-800'}>
+                  {isEligible ? '✓ UNLOCKED' : '🔒 LOCKED'}
+                </span>
+              </div>
+            </div>
+
+            {/* Congratulations Banner / Unlock CTA */}
+            {isEligible ? (
+              <div className="mt-6 p-5 bg-emerald-50 border-[2px] border-emerald-800 text-emerald-950 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3 text-center sm:text-left">
+                  <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black tracking-tight">
+                      Congratulations! You have successfully completed all course assessments.
+                    </h3>
+                    <p className="text-xs font-mono text-emerald-800">
+                      20/20 Quiz • 20/20 Coding • 20/20 Debugging fully verified by Sunny Organization.
+                    </p>
+                  </div>
+                </div>
+
+                {!isClaimed ? (
+                  <button
+                    onClick={() => {
+                      handleClaimCertificate();
+                      setActiveTab('certificate');
+                    }}
+                    className="px-6 py-3 bg-[#111111] hover:bg-[#1A42D9] text-white font-mono text-xs font-black tracking-wider uppercase border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    CLAIM CERTIFICATE
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setActiveTab('certificate')}
+                    className="px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] transition-all cursor-pointer whitespace-nowrap flex items-center gap-2"
+                  >
+                    <Award className="w-4 h-4" />
+                    <span>VIEW ISSUED CERTIFICATE</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="mt-6 p-4 bg-amber-50 border-[2px] border-amber-700 text-amber-950 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>
+                    Certificate remains locked until all 3 assessment tracks are 20/20 complete.
+                  </span>
+                </div>
+                <div className="text-stone-700">
+                  Remaining: {20 - quizCount} Quiz, {20 - codingCount} Coding, {20 - debuggingCount} Debugging
+                </div>
+              </div>
+            )}
+
+            {/* Quick Action Stage Launchers */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+              
+              <div className="p-4 bg-white border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase font-bold text-stone-500">Stage 1</span>
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 border border-[#111111] ${
+                    quizCount >= 20 ? 'bg-emerald-100 text-emerald-900' : 'bg-stone-100 text-stone-800'
+                  }`}>
+                    {quizCount >= 20 ? 'COMPLETED' : `${quizCount}/20`}
+                  </span>
+                </div>
+                <h4 className="text-sm font-black text-[#111111]">Quiz Challenge</h4>
+                <p className="text-[11px] text-stone-600 leading-relaxed font-mono">
+                  20 conceptual multiple-choice challenges testing loss functions, regularization, linear models, and neural architectures.
+                </p>
+                <button
+                  onClick={() => setActiveTab('quiz')}
+                  className="w-full py-2 bg-[#FAF8F2] hover:bg-stone-100 border-[2px] border-[#111111] text-xs font-mono font-bold text-[#111111] flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>{quizCount >= 20 ? 'REVIEW QUESTIONS' : 'CONTINUE QUIZ'}</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="p-4 bg-white border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase font-bold text-stone-500">Stage 2</span>
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 border border-[#111111] ${
+                    codingCount >= 20 ? 'bg-emerald-100 text-emerald-900' : 'bg-stone-100 text-stone-800'
+                  }`}>
+                    {codingCount >= 20 ? 'COMPLETED' : `${codingCount}/20`}
+                  </span>
+                </div>
+                <h4 className="text-sm font-black text-[#111111]">Coding Challenge</h4>
+                <p className="text-[11px] text-stone-600 leading-relaxed font-mono">
+                  20 practical Python and NumPy algorithmic implementations across Easy, Medium, and Hard tiers with automated test evaluation.
+                </p>
+                <button
+                  onClick={() => setActiveTab('coding')}
+                  className="w-full py-2 bg-[#FAF8F2] hover:bg-stone-100 border-[2px] border-[#111111] text-xs font-mono font-bold text-[#111111] flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>{codingCount >= 20 ? 'REVIEW PROBLEMS' : 'CONTINUE CODING'}</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="p-4 bg-white border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase font-bold text-stone-500">Stage 3</span>
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 border border-[#111111] ${
+                    debuggingCount >= 20 ? 'bg-emerald-100 text-emerald-900' : 'bg-stone-100 text-stone-800'
+                  }`}>
+                    {debuggingCount >= 20 ? 'COMPLETED' : `${debuggingCount}/20`}
+                  </span>
+                </div>
+                <h4 className="text-sm font-black text-[#111111]">Debugging Challenge</h4>
+                <p className="text-[11px] text-stone-600 leading-relaxed font-mono">
+                  20 broken ML snippets with realistic bugs: broadcasting errors, gradient inversions, data leakage, and numerical overflows.
+                </p>
+                <button
+                  onClick={() => setActiveTab('debugging')}
+                  className="w-full py-2 bg-[#FAF8F2] hover:bg-stone-100 border-[2px] border-[#111111] text-xs font-mono font-bold text-[#111111] flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>{debuggingCount >= 20 ? 'REVIEW BUGS' : 'CONTINUE DEBUGGING'}</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+            </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-2.5 bg-[#FAF8F2] border-[2px] border-[#111111]">
-              <div className="flex items-center gap-2 text-xs font-mono">
-                <CheckCircle2 className={`w-4 h-4 ${completedQuizzesCount >= 1 || demoUnlocked ? 'text-emerald-700' : 'text-stone-400'}`} />
-                <span className="font-bold">Diagnostic Benchmarks:</span>
-              </div>
-              <span className="text-xs font-mono font-black text-[#1A42D9]">
-                {demoUnlocked ? '8 / 8 Complete' : `${completedQuizzesCount} / 8 Complete`}
+          {/* Legal Recipient Customization Card */}
+          <div className="bg-white border-[3px] border-[#111111] shadow-[5px_5px_0px_0px_#111111] p-6">
+            <div className="flex items-center justify-between border-b-[2px] border-[#111111] pb-3 mb-4">
+              <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-[#111111]">
+                Certificate Recipient Profile
+              </h3>
+              <span className="text-[10px] font-mono text-stone-500 font-bold">
+                ID: {credentialId}
               </span>
             </div>
 
-            <div className="flex items-center justify-between p-2.5 bg-[#FAF8F2] border-[2px] border-[#111111]">
-              <div className="flex items-center gap-2 text-xs font-mono">
-                <CheckCircle2 className={`w-4 h-4 ${completedLessonsCount >= 1 || demoUnlocked ? 'text-emerald-700' : 'text-stone-400'}`} />
-                <span className="font-bold">Theoretical Course Lessons:</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-mono font-bold text-stone-700 uppercase mb-1">
+                  Learner Legal Name (Appears on Certificate):
+                </label>
+                <input
+                  type="text"
+                  value={recipientName}
+                  onChange={(e) => setRecipientName(e.target.value)}
+                  placeholder="e.g. Alex Rivera"
+                  className="w-full px-3.5 py-2.5 bg-[#FAF8F2] border-[2px] border-[#111111] font-mono text-xs font-bold text-[#111111] focus:outline-none focus:border-[#1A42D9]"
+                />
               </div>
-              <span className="text-xs font-mono font-black text-[#1A42D9]">
-                {demoUnlocked ? '10 / 10 Mastered' : `${completedLessonsCount} / 10 Mastered`}
-              </span>
+
+              <div>
+                <label className="block text-[11px] font-mono font-bold text-stone-700 uppercase mb-1">
+                  Accredited Course Curriculum:
+                </label>
+                <input
+                  type="text"
+                  disabled
+                  value={courseName}
+                  className="w-full px-3.5 py-2.5 bg-stone-100 border-[2px] border-[#111111] font-mono text-xs font-bold text-stone-600 cursor-not-allowed"
+                />
+              </div>
             </div>
 
-            <div className="flex items-center justify-between p-2.5 bg-[#FAF8F2] border-[2px] border-[#111111]">
-              <div className="flex items-center gap-2 text-xs font-mono">
-                <CheckCircle2 className={`w-4 h-4 ${completedChallengesCount >= 1 || demoUnlocked ? 'text-emerald-700' : 'text-stone-400'}`} />
-                <span className="font-bold">Empirical Jupyter Lab Challenges:</span>
+            <div className="mt-4 pt-3 border-t border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] font-mono text-stone-600">
+              <div>
+                Issuer: <span className="font-bold text-[#111111]">K AKASH — Founder, Sunny Organization</span>
               </div>
-              <span className="text-xs font-mono font-black text-[#1A42D9]">
-                {demoUnlocked ? '5 / 5 Verified' : `${completedChallengesCount} / 5 Verified`}
-              </span>
+              <div>
+                Accreditation Status: <span className="font-bold text-[#1A42D9]">{isEligible ? 'Eligible for Issuance' : 'Incomplete Requirements'}</span>
+              </div>
             </div>
           </div>
 
-          {/* Quick Demo Unlock Button for instant examiner review */}
-          {!demoUnlocked && (
-            <div className="mt-4 pt-3 border-t-[2px] border-[#111111] flex items-center justify-between">
-              <span className="text-[11px] font-mono text-stone-600">
-                Want to preview the 100% completed certificate immediately?
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 2: STAGE 1 - QUIZ CHALLENGE (20 QUESTIONS)                       */}
+      {/* ==================================================================== */}
+      {activeTab === 'quiz' && (
+        <div className="max-w-4xl mx-auto space-y-6 no-print">
+          
+          {/* Quiz Stage Header */}
+          <div className="bg-white border-[3px] border-[#111111] shadow-[5px_5px_0px_0px_#111111] p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-[2px] border-[#111111] pb-3 mb-4 gap-2">
+              <div className="flex items-center gap-2">
+                <BrainCircuit className="w-4 h-4 text-[#1A42D9]" />
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#111111]">
+                  Stage 1: 20 Quiz Challenges
+                </span>
+              </div>
+              <div className="text-xs font-mono font-bold text-[#1A42D9]">
+                Progress: {quizCount} / 20 Answered
+              </div>
+            </div>
+
+            {/* Question Index Pills 1..20 */}
+            <div className="flex flex-wrap gap-1.5 my-3">
+              {QUIZ_ASSESSMENTS.map((q, idx) => {
+                const isCompleted = completedQuizzes.includes(q.id);
+                const isCurrent = idx === currentQuizIdx;
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => {
+                      setCurrentQuizIdx(idx);
+                      setSelectedQuizOption(null);
+                      setIsQuizAnswered(false);
+                    }}
+                    className={`w-8 h-8 font-mono text-xs font-bold border-[2px] transition-all cursor-pointer flex items-center justify-center ${
+                      isCurrent
+                        ? 'border-[#111111] bg-[#111111] text-white shadow-[2px_2px_0px_0px_#1A42D9]'
+                        : isCompleted
+                          ? 'border-emerald-700 bg-emerald-100 text-emerald-950'
+                          : 'border-[#111111] bg-[#FAF8F2] text-[#111111] hover:bg-stone-200'
+                    }`}
+                    title={q.title}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Active Question Card */}
+          <div className="bg-white border-[3px] border-[#111111] shadow-[5px_5px_0px_0px_#111111] p-6 sm:p-8 space-y-6">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-[#FAF8F2] border border-[#111111] font-mono text-[10px] font-bold uppercase">
+                  {currentQuiz.category}
+                </span>
+                <span className={`px-2 py-0.5 border border-[#111111] font-mono text-[10px] font-bold uppercase ${
+                  currentQuiz.difficulty === 'Easy' ? 'bg-emerald-50 text-emerald-900' :
+                  currentQuiz.difficulty === 'Medium' ? 'bg-amber-50 text-amber-900' :
+                  'bg-rose-50 text-rose-900'
+                }`}>
+                  {currentQuiz.difficulty}
+                </span>
+              </div>
+              <span className="font-mono text-xs font-bold text-stone-500">
+                Question {currentQuizIdx + 1} of 20
               </span>
+            </div>
+
+            <h3 className="text-base sm:text-lg font-bold text-[#111111] leading-relaxed">
+              {currentQuiz.question}
+            </h3>
+
+            {/* 4 Options */}
+            <div className="space-y-2.5">
+              {currentQuiz.options.map((opt, oIdx) => {
+                const isSelected = selectedQuizOption === oIdx;
+                const isCorrect = oIdx === currentQuiz.correctAnswer;
+                let btnStyle = 'bg-[#FAF8F2] hover:bg-stone-100 text-[#111111] border-[#111111]';
+
+                if (isQuizAnswered) {
+                  if (isCorrect) {
+                    btnStyle = 'bg-emerald-100 border-emerald-800 text-emerald-950 font-bold';
+                  } else if (isSelected) {
+                    btnStyle = 'bg-rose-100 border-rose-800 text-rose-950';
+                  } else {
+                    btnStyle = 'bg-white opacity-50 border-stone-300 text-stone-600';
+                  }
+                }
+
+                return (
+                  <button
+                    key={oIdx}
+                    onClick={() => handleSelectQuizOption(oIdx)}
+                    disabled={isQuizAnswered}
+                    className={`w-full p-3.5 text-left border-[2px] transition-all font-sans text-xs sm:text-sm flex items-start gap-3 cursor-pointer ${btnStyle}`}
+                  >
+                    <span className="font-mono font-bold text-xs uppercase shrink-0 mt-0.5">
+                      {String.fromCharCode(65 + oIdx)}.
+                    </span>
+                    <span>{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Explanation when answered */}
+            {isQuizAnswered && (
+              <div className={`p-4 border-[2px] space-y-1.5 ${
+                selectedQuizOption === currentQuiz.correctAnswer
+                  ? 'bg-emerald-50 border-emerald-800 text-emerald-950'
+                  : 'bg-amber-50 border-amber-800 text-amber-950'
+              }`}>
+                <div className="font-mono text-xs font-bold flex items-center gap-1.5">
+                  {selectedQuizOption === currentQuiz.correctAnswer ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-700" />
+                      <span>Correct Answer! (+{currentQuiz.xpReward} XP)</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="w-4 h-4 text-amber-800" />
+                      <span>Explanation:</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-xs leading-relaxed font-sans">
+                  {currentQuiz.explanation}
+                </p>
+              </div>
+            )}
+
+            {/* Navigation Buttons */}
+            <div className="pt-4 border-t border-stone-200 flex items-center justify-between">
               <button
-                onClick={handleUnlockDemo}
-                className="px-3 py-1.5 rounded-none bg-[#FAF8F2] hover:bg-stone-100 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] text-[10px] font-mono font-bold text-[#1A42D9] flex items-center gap-1.5 transition-all cursor-pointer"
+                onClick={handlePrevQuiz}
+                disabled={currentQuizIdx === 0}
+                className="px-4 py-2 bg-white border-[2px] border-[#111111] font-mono text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
               >
-                <Unlock className="w-3 h-3" />
-                <span>FAST-TRACK UNLOCK</span>
+                PREVIOUS QUESTION
+              </button>
+
+              <button
+                onClick={handleNextQuiz}
+                disabled={currentQuizIdx === QUIZ_ASSESSMENTS.length - 1}
+                className="px-4 py-2 bg-[#111111] hover:bg-[#1A42D9] text-white border-[2px] border-[#111111] font-mono text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
+              >
+                <span>NEXT QUESTION</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
-          )}
-        </div>
-
-        {/* Right Card: Credential Customization */}
-        <div className="lg:col-span-6 bg-white border-[3px] border-[#111111] shadow-[5px_5px_0px_0px_#111111] rounded-none p-6">
-          <div className="flex items-center justify-between border-b-[2px] border-[#111111] pb-3 mb-4">
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#111111]">
-              Credential Personalization
-            </span>
-            <span className="text-[10px] font-mono text-stone-500 font-bold">
-              ID: {credentialId}
-            </span>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[11px] font-mono font-bold text-stone-700 uppercase mb-1">
-                Recipient Legal Name:
-              </label>
-              <input
-                type="text"
-                value={recipientName}
-                onChange={(e) => setRecipientName(e.target.value)}
-                placeholder="e.g. Alex Rivera"
-                className="w-full px-3.5 py-2 rounded-none bg-[#FAF8F2] border-[2px] border-[#111111] font-mono text-xs font-bold text-[#111111] focus:outline-none focus:border-[#1A42D9]"
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 3: STAGE 2 - CODING CHALLENGE (20 PROBLEMS)                      */}
+      {/* ==================================================================== */}
+      {activeTab === 'coding' && (
+        <div className="max-w-5xl mx-auto space-y-6 no-print">
+          
+          {/* Coding Stage Header & Index Selector */}
+          <div className="bg-white border-[3px] border-[#111111] shadow-[5px_5px_0px_0px_#111111] p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-[2px] border-[#111111] pb-3 mb-4 gap-2">
+              <div className="flex items-center gap-2">
+                <FileCode2 className="w-4 h-4 text-[#D97706]" />
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#111111]">
+                  Stage 2: 20 Coding Challenges
+                </span>
+              </div>
+              <div className="text-xs font-mono font-bold text-[#D97706]">
+                Progress: {codingCount} / 20 Verified
+              </div>
+            </div>
+
+            {/* 1..20 Problem Selector */}
+            <div className="flex flex-wrap gap-1.5 my-3">
+              {CODING_ASSESSMENTS.map((c, idx) => {
+                const isCompleted = completedCoding.includes(c.id);
+                const isCurrent = idx === currentCodingIdx;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setCurrentCodingIdx(idx)}
+                    className={`w-8 h-8 font-mono text-xs font-bold border-[2px] transition-all cursor-pointer flex items-center justify-center ${
+                      isCurrent
+                        ? 'border-[#111111] bg-[#111111] text-white shadow-[2px_2px_0px_0px_#D97706]'
+                        : isCompleted
+                          ? 'border-emerald-700 bg-emerald-100 text-emerald-950'
+                          : 'border-[#111111] bg-[#FAF8F2] text-[#111111] hover:bg-stone-200'
+                    }`}
+                    title={c.title}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Problem Details & Editor */}
+          <div className="bg-white border-[3px] border-[#111111] shadow-[5px_5px_0px_0px_#111111] p-6 sm:p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-stone-200 pb-3 gap-2">
+              <div>
+                <span className="font-mono text-[10px] uppercase font-bold text-stone-500">
+                  Challenge {currentCodingIdx + 1} of 20
+                </span>
+                <h3 className="text-lg font-black text-[#111111]">
+                  {currentCoding.title}
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-[#FAF8F2] border border-[#111111] font-mono text-[10px] font-bold">
+                  {currentCoding.category}
+                </span>
+                <span className="px-2 py-0.5 bg-amber-50 border border-amber-800 text-amber-950 font-mono text-[10px] font-bold">
+                  {currentCoding.difficulty}
+                </span>
+                <span className="font-mono text-xs font-bold text-emerald-700">
+                  +{currentCoding.xpReward} XP
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs sm:text-sm text-stone-800 font-sans leading-relaxed">
+              {currentCoding.description}
+            </p>
+
+            {/* Code Editor */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-mono text-stone-600">
+                <span>Python Implementation:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowCodingHint(!showCodingHint)}
+                    className="text-[#1A42D9] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>{showCodingHint ? 'Hide Hint' : 'View Hint'}</span>
+                  </button>
+                  <button
+                    onClick={() => setCodingCode(currentCoding.starterCode)}
+                    className="text-stone-500 hover:text-[#111111] cursor-pointer flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset</span>
+                  </button>
+                </div>
+              </div>
+
+              {showCodingHint && (
+                <div className="p-3 bg-amber-50 border-[2px] border-amber-800 text-amber-950 font-mono text-xs">
+                  <strong>Hint:</strong> {currentCoding.hint}
+                </div>
+              )}
+
+              <textarea
+                value={codingCode}
+                onChange={(e) => setCodingCode(e.target.value)}
+                rows={11}
+                className="w-full p-4 font-mono text-xs bg-[#111111] text-emerald-400 border-[2px] border-[#111111] focus:outline-none focus:border-[#1A42D9] leading-relaxed resize-y"
+                spellCheck={false}
               />
             </div>
 
-            <div>
-              <label className="block text-[11px] font-mono font-bold text-stone-700 uppercase mb-1">
-                Specialization Track:
-              </label>
-              <select
-                value={specialization}
-                onChange={(e) => setSpecialization(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-none bg-[#FAF8F2] border-[2px] border-[#111111] font-mono text-xs font-bold text-[#111111] focus:outline-none focus:border-[#1A42D9] cursor-pointer"
+            {/* Run & Evaluate Button */}
+            <div className="flex items-center justify-between gap-4">
+              <button
+                onClick={handleRunCodingEvaluation}
+                disabled={isEvaluatingCoding}
+                className="px-6 py-3 bg-[#111111] hover:bg-[#1A42D9] text-white border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 font-mono text-xs font-black flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
               >
-                <option value="Machine Learning & First-Principles Engineering">
-                  Machine Learning & First-Principles Engineering
-                </option>
-                <option value="Deep Neural Networks & Tensor Calculus">
-                  Deep Neural Networks & Tensor Calculus
-                </option>
-                <option value="Empirical Systems & Feature Pipeline Architecture">
-                  Empirical Systems & Feature Pipeline Architecture
-                </option>
-              </select>
+                <Play className="w-4 h-4 fill-current" />
+                <span>{isEvaluatingCoding ? 'RUNNING TEST SUITE...' : 'SUBMIT & EVALUATE CODE'}</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentCodingIdx(Math.max(0, currentCodingIdx - 1))}
+                  disabled={currentCodingIdx === 0}
+                  className="px-3 py-2 bg-white border-[2px] border-[#111111] font-mono text-xs font-bold disabled:opacity-30 cursor-pointer"
+                >
+                  PREV
+                </button>
+                <button
+                  onClick={() => setCurrentCodingIdx(Math.min(CODING_ASSESSMENTS.length - 1, currentCodingIdx + 1))}
+                  disabled={currentCodingIdx === CODING_ASSESSMENTS.length - 1}
+                  className="px-3 py-2 bg-white border-[2px] border-[#111111] font-mono text-xs font-bold disabled:opacity-30 cursor-pointer"
+                >
+                  NEXT
+                </button>
+              </div>
+            </div>
+
+            {/* Test Evaluation Console */}
+            {codingEvalResult && (
+              <div className={`p-4 border-[2px] font-mono text-xs space-y-3 ${
+                codingEvalResult.passed 
+                  ? 'bg-emerald-50 border-emerald-800 text-emerald-950' 
+                  : 'bg-rose-50 border-rose-800 text-rose-950'
+              }`}>
+                <div className="flex items-center justify-between border-b border-current/20 pb-2 font-bold">
+                  <span>TEST RESULTS ({codingEvalResult.executionTimeMs}ms)</span>
+                  <span>SCORE: {codingEvalResult.score}%</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {codingEvalResult.testCases.map((tc, tIdx) => (
+                    <div key={tIdx} className="flex items-start gap-2">
+                      {tc.passed ? (
+                        <Check className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+                      )}
+                      <div>
+                        <span className="font-bold">{tc.name}:</span> {tc.details}
+                        {tc.input && (
+                          <div className="text-[11px] opacity-80">Input: {tc.input} | Expected: {tc.expected}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-2 border-t border-current/20 text-xs font-bold">
+                  {codingEvalResult.output}
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 4: STAGE 3 - DEBUGGING CHALLENGE (20 PROBLEMS)                   */}
+      {/* ==================================================================== */}
+      {activeTab === 'debugging' && (
+        <div className="max-w-5xl mx-auto space-y-6 no-print">
+          
+          {/* Debugging Stage Header & Index Selector */}
+          <div className="bg-white border-[3px] border-[#111111] shadow-[5px_5px_0px_0px_#111111] p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-[2px] border-[#111111] pb-3 mb-4 gap-2">
+              <div className="flex items-center gap-2">
+                <Bug className="w-4 h-4 text-rose-600" />
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#111111]">
+                  Stage 3: 20 Debugging Challenges
+                </span>
+              </div>
+              <div className="text-xs font-mono font-bold text-rose-700">
+                Progress: {debuggingCount} / 20 Resolved
+              </div>
+            </div>
+
+            {/* 1..20 Bug Selector */}
+            <div className="flex flex-wrap gap-1.5 my-3">
+              {DEBUGGING_ASSESSMENTS.map((d, idx) => {
+                const isCompleted = completedDebugging.includes(d.id);
+                const isCurrent = idx === currentDebuggingIdx;
+                return (
+                  <button
+                    key={d.id}
+                    onClick={() => setCurrentDebuggingIdx(idx)}
+                    className={`w-8 h-8 font-mono text-xs font-bold border-[2px] transition-all cursor-pointer flex items-center justify-center ${
+                      isCurrent
+                        ? 'border-[#111111] bg-[#111111] text-white shadow-[2px_2px_0px_0px_#E11D48]'
+                        : isCompleted
+                          ? 'border-emerald-700 bg-emerald-100 text-emerald-950'
+                          : 'border-[#111111] bg-[#FAF8F2] text-[#111111] hover:bg-stone-200'
+                    }`}
+                    title={d.title}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* 3. THE CERTIFICATE DISPLAY (PRINTABLE & HIGH-FIDELITY) */}
-      <div className="max-w-6xl mx-auto flex justify-center">
-        <div
-          ref={certRef}
-          id="printable_certificate_node"
-          className="w-full bg-[#FCFAF5] border-[4px] border-[#111111] shadow-[10px_10px_0px_0px_#111111] p-8 sm:p-14 lg:p-16 relative select-text overflow-hidden"
-        >
-          {/* Decorative Framing */}
-          <div className="border-[2px] border-[#1A42D9] p-6 sm:p-10 relative">
+          {/* Bug Details & Editor */}
+          <div className="bg-white border-[3px] border-[#111111] shadow-[5px_5px_0px_0px_#111111] p-6 sm:p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-stone-200 pb-3 gap-2">
+              <div>
+                <span className="font-mono text-[10px] uppercase font-bold text-stone-500">
+                  Bug Investigation {currentDebuggingIdx + 1} of 20
+                </span>
+                <h3 className="text-lg font-black text-[#111111]">
+                  {currentDebugging.title}
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-[#FAF8F2] border border-[#111111] font-mono text-[10px] font-bold">
+                  {currentDebugging.category}
+                </span>
+                <span className="px-2 py-0.5 bg-rose-50 border border-rose-800 text-rose-950 font-mono text-[10px] font-bold">
+                  {currentDebugging.difficulty}
+                </span>
+                <span className="font-mono text-xs font-bold text-emerald-700">
+                  +{currentDebugging.xpReward} XP
+                </span>
+              </div>
+            </div>
+
+            <div className="p-4 bg-rose-50 border-[2px] border-rose-800 text-rose-950 font-mono text-xs space-y-1">
+              <div className="font-bold flex items-center gap-1.5">
+                <Bug className="w-4 h-4" />
+                <span>Production Bug Symptom:</span>
+              </div>
+              <p className="font-sans leading-relaxed">{currentDebugging.description}</p>
+            </div>
+
+            {/* Code Editor */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-mono text-stone-600">
+                <span>Fix the Broken Code Below:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowDebuggingHint(!showDebuggingHint)}
+                    className="text-[#1A42D9] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>{showDebuggingHint ? 'Hide Hint' : 'View Hint'}</span>
+                  </button>
+                  <button
+                    onClick={() => setDebuggingCode(currentDebugging.brokenCode)}
+                    className="text-stone-500 hover:text-[#111111] cursor-pointer flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset</span>
+                  </button>
+                </div>
+              </div>
+
+              {showDebuggingHint && (
+                <div className="p-3 bg-amber-50 border-[2px] border-amber-800 text-amber-950 font-mono text-xs">
+                  <strong>Hint:</strong> {currentDebugging.hint}
+                </div>
+              )}
+
+              <textarea
+                value={debuggingCode}
+                onChange={(e) => setDebuggingCode(e.target.value)}
+                rows={11}
+                className="w-full p-4 font-mono text-xs bg-[#111111] text-amber-300 border-[2px] border-[#111111] focus:outline-none focus:border-[#1A42D9] leading-relaxed resize-y"
+                spellCheck={false}
+              />
+            </div>
+
+            {/* Run & Evaluate Button */}
+            <div className="flex items-center justify-between gap-4">
+              <button
+                onClick={handleRunDebuggingEvaluation}
+                disabled={isEvaluatingDebugging}
+                className="px-6 py-3 bg-[#111111] hover:bg-[#1A42D9] text-white border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 font-mono text-xs font-black flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                <span>{isEvaluatingDebugging ? 'RUNNING INTEGRITY CHECKS...' : 'SUBMIT FIX & VERIFY'}</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentDebuggingIdx(Math.max(0, currentDebuggingIdx - 1))}
+                  disabled={currentDebuggingIdx === 0}
+                  className="px-3 py-2 bg-white border-[2px] border-[#111111] font-mono text-xs font-bold disabled:opacity-30 cursor-pointer"
+                >
+                  PREV
+                </button>
+                <button
+                  onClick={() => setCurrentDebuggingIdx(Math.min(DEBUGGING_ASSESSMENTS.length - 1, currentDebuggingIdx + 1))}
+                  disabled={currentDebuggingIdx === DEBUGGING_ASSESSMENTS.length - 1}
+                  className="px-3 py-2 bg-white border-[2px] border-[#111111] font-mono text-xs font-bold disabled:opacity-30 cursor-pointer"
+                >
+                  NEXT
+                </button>
+              </div>
+            </div>
+
+            {/* Test Evaluation Console */}
+            {debuggingEvalResult && (
+              <div className={`p-4 border-[2px] font-mono text-xs space-y-3 ${
+                debuggingEvalResult.passed 
+                  ? 'bg-emerald-50 border-emerald-800 text-emerald-950' 
+                  : 'bg-rose-50 border-rose-800 text-rose-950'
+              }`}>
+                <div className="flex items-center justify-between border-b border-current/20 pb-2 font-bold">
+                  <span>DEBUGGER RESULTS ({debuggingEvalResult.executionTimeMs}ms)</span>
+                  <span>STATUS: {debuggingEvalResult.passed ? 'BUG FIXED' : 'STILL BUGGY'}</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {debuggingEvalResult.testCases.map((tc, tIdx) => (
+                    <div key={tIdx} className="flex items-start gap-2">
+                      {tc.passed ? (
+                        <Check className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+                      )}
+                      <div>
+                        <span className="font-bold">{tc.name}:</span> {tc.details}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-2 border-t border-current/20 text-xs font-bold">
+                  {debuggingEvalResult.output}
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 5: THE CERTIFICATE DISPLAY (PRINTABLE & HIGH-FIDELITY)           */}
+      {/* ==================================================================== */}
+      {activeTab === 'certificate' && (
+        <div className="max-w-6xl mx-auto space-y-6">
+          
+          {/* If NOT eligible: show prominent locked alert */}
+          {!isEligible && (
+            <div className="bg-amber-50 border-[3px] border-amber-800 p-6 shadow-[5px_5px_0px_0px_#111111] no-print">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-amber-600 text-white rounded-none border-[2px] border-[#111111] flex items-center justify-center shrink-0">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-black text-amber-950 uppercase tracking-wide">
+                    Certificate Locked — Assessment Requirements Incomplete
+                  </h3>
+                  <p className="text-xs font-mono text-amber-900 leading-relaxed">
+                    Sunny Organization policy strictly mandates that the final certificate must be earned by completing 100% of all three evaluation stages. Previews and downloads remain locked until requirements are verified.
+                  </p>
+                  <div className="flex flex-wrap gap-4 pt-2 text-xs font-mono font-bold">
+                    <span className={quizCount >= 20 ? 'text-emerald-700' : 'text-amber-900'}>
+                      Quiz: {quizCount}/20 {quizCount >= 20 ? '✓' : `(Needs ${20 - quizCount} more)`}
+                    </span>
+                    <span className={codingCount >= 20 ? 'text-emerald-700' : 'text-amber-900'}>
+                      Coding: {codingCount}/20 {codingCount >= 20 ? '✓' : `(Needs ${20 - codingCount} more)`}
+                    </span>
+                    <span className={debuggingCount >= 20 ? 'text-emerald-700' : 'text-amber-900'}>
+                      Debugging: {debuggingCount}/20 {debuggingCount >= 20 ? '✓' : `(Needs ${20 - debuggingCount} more)`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* If eligible but not claimed yet */}
+          {isEligible && !isClaimed && (
+            <div className="bg-emerald-50 border-[3px] border-emerald-800 p-6 shadow-[5px_5px_0px_0px_#111111] no-print">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-emerald-950">
+                      Congratulations! You have successfully completed all course assessments.
+                    </h3>
+                    <p className="text-xs font-mono text-emerald-800">
+                      Click below to generate your unique credential ID and claim your official Sunny Organization certificate.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleClaimCertificate}
+                  className="px-8 py-3.5 bg-[#111111] hover:bg-[#1A42D9] text-white font-mono text-xs font-black uppercase tracking-wider border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] cursor-pointer whitespace-nowrap transition-all"
+                >
+                  CLAIM CERTIFICATE
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* THE OFFICIAL CERTIFICATE NODE */}
+          <div className="flex justify-center relative">
             
-            {/* Corner Decorative Crosshairs */}
-            <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#111111]" />
-            <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-[#111111]" />
-            <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-[#111111]" />
-            <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-[#111111]" />
-
-            {/* Institution Brand */}
-            <div className="text-center space-y-1 mb-8">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#1A42D9]/10 border border-[#1A42D9] text-[#1A42D9] font-mono text-[11px] font-bold tracking-widest uppercase">
-                <span>NEURAFORGE INSTITUTE OF ARTIFICIAL INTELLIGENCE</span>
-              </div>
-              <p className="text-stone-500 font-mono text-[10px] tracking-wider uppercase">
-                DIVISION OF COMPUTATIONAL MATHEMATICS & FIRST-PRINCIPLES SYSTEMS
-              </p>
-            </div>
-
-            {/* Title */}
-            <div className="text-center space-y-2 mb-8">
-              <h2 className="text-3xl sm:text-5xl font-black font-serif tracking-tight text-[#111111]">
-                CERTIFICATE OF MASTERY
-              </h2>
-              <p className="text-xs sm:text-sm font-serif italic text-stone-600">
-                This official credential certifies that
-              </p>
-            </div>
-
-            {/* Recipient Name */}
-            <div className="text-center my-6">
-              <div className="text-3xl sm:text-5xl lg:text-6xl font-black font-serif text-[#111111] tracking-wide uppercase underline decoration-[#1A42D9] decoration-2 underline-offset-8">
-                {recipientName || 'LEARNER'}
-              </div>
-            </div>
-
-            {/* Citation Statement */}
-            <div className="text-center max-w-3xl mx-auto space-y-3 my-8">
-              <p className="text-xs sm:text-sm text-stone-700 leading-relaxed font-sans">
-                has successfully fulfilled all theoretical evaluations, empirical Jupyter benchmarks, and mathematical proofs required to establish certified mastery in
-              </p>
-              <div className="text-lg sm:text-xl font-bold font-mono text-[#1A42D9]">
-                {specialization}
-              </div>
-              <p className="text-[11px] text-stone-500 font-mono leading-relaxed">
-                Demonstrating rigorous analytical formulation across loss landscapes, closed-form projections, backpropagation dynamics, and data leakage safeguards.
-              </p>
-            </div>
-
-            {/* Five Certified Competencies */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-w-3xl mx-auto my-8 text-center sm:text-left">
-              {[
-                'Ordinary Least Squares & Projections',
-                'Convex Optimization & Gradient Descent',
-                'Voronoi Metric Spaces & K-Means',
-                'Recursive Gini Partitioning & Trees',
-                'Neural Backprop & Tensor Calculus',
-                'Pipeline Integrity & Leakage Prevention'
-              ].map((skill, i) => (
-                <div key={i} className="flex items-center gap-2 p-2 bg-white border border-[#111111] text-[10px] font-mono font-bold text-stone-800">
-                  <Check className="w-3.5 h-3.5 text-[#1A42D9] shrink-0" />
-                  <span className="truncate">{skill}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Signatures & Seal Section */}
-            <div className="pt-8 border-t-[2px] border-[#111111] mt-10 grid grid-cols-1 sm:grid-cols-3 gap-8 items-center text-center sm:text-left">
-              
-              {/* Signature 1 */}
-              <div>
-                <div className="h-10 flex items-end justify-center sm:justify-start">
-                  <span className="font-serif italic text-2xl text-stone-800 font-bold">
-                    Elena Rostova
-                  </span>
-                </div>
-                <div className="border-t border-[#111111] pt-1.5 mt-1">
-                  <div className="text-[11px] font-mono font-bold text-[#111111]">
-                    DR. ELENA ROSTOVA
+            {/* Watermark/Lock Overlay if NOT eligible */}
+            {!isEligible && (
+              <div className="absolute inset-0 bg-stone-900/40 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center p-6 text-center no-print">
+                <div className="bg-white border-[4px] border-[#111111] shadow-[10px_10px_0px_0px_#111111] p-8 max-w-md space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-900 mx-auto flex items-center justify-center border-[2px] border-[#111111]">
+                    <Lock className="w-8 h-8" />
                   </div>
-                  <div className="text-[10px] font-mono text-stone-500">
-                    Lead Fellow, Theoretical Intelligence
+                  <h4 className="text-xl font-black text-[#111111]">
+                    CERTIFICATE LOCKED
+                  </h4>
+                  <p className="text-xs font-mono text-stone-600 leading-relaxed">
+                    Complete all 20 Quiz Challenges, 20 Coding Challenges, and 20 Debugging Challenges to unlock and claim this official credential.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('dashboard')}
+                    className="w-full py-2.5 bg-[#111111] hover:bg-[#1A42D9] text-white font-mono text-xs font-bold border-[2px] border-[#111111] transition-colors cursor-pointer"
+                  >
+                    RETURN TO PROGRESS DASHBOARD
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div
+              ref={certRef}
+              id="printable_certificate_node"
+              className="w-full bg-[#FCFAF5] border-[4px] border-[#111111] shadow-[10px_10px_0px_0px_#111111] p-8 sm:p-14 lg:p-16 relative select-text overflow-hidden"
+            >
+              {/* Decorative Framing */}
+              <div className="border-[2px] border-[#1A42D9] p-6 sm:p-10 relative">
+                
+                {/* Corner Decorative Crosshairs */}
+                <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#111111]" />
+                <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-[#111111]" />
+                <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-[#111111]" />
+                <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-[#111111]" />
+
+                {/* Organization Brand: SUNNY ORGANIZATION */}
+                <div className="text-center space-y-1 mb-8">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#1A42D9]/10 border border-[#1A42D9] text-[#1A42D9] font-mono text-[11px] font-bold tracking-widest uppercase">
+                    <span>SUNNY ORGANIZATION</span>
+                  </div>
+                  <p className="text-stone-500 font-mono text-[10px] tracking-wider uppercase">
+                    ACADEMIC & FIRST-PRINCIPLES ARTIFICIAL INTELLIGENCE DIVISION
+                  </p>
+                </div>
+
+                {/* Title */}
+                <div className="text-center space-y-2 mb-8">
+                  <h2 className="text-3xl sm:text-5xl font-black font-serif tracking-tight text-[#111111]">
+                    Certificate of Completion
+                  </h2>
+                  <p className="text-xs sm:text-sm font-serif italic text-stone-600">
+                    This certificate is proudly presented to
+                  </p>
+                </div>
+
+                {/* Recipient Name */}
+                <div className="text-center my-6">
+                  <div className="text-3xl sm:text-5xl lg:text-6xl font-black font-serif text-[#111111] tracking-wide uppercase underline decoration-[#1A42D9] decoration-2 underline-offset-8">
+                    {recipientName || 'LEARNER NAME'}
                   </div>
                 </div>
-              </div>
 
-              {/* Verified Gold Seal */}
-              <div className="flex flex-col items-center justify-center">
-                <div className="w-24 h-24 rounded-full bg-[#D97706] border-[3px] border-[#B45309] flex items-center justify-center shadow-md p-1">
-                  <div className="w-full h-full rounded-full bg-[#1A42D9] border border-amber-300 flex flex-col items-center justify-center text-white text-center p-1">
-                    <span className="text-[8px] font-mono tracking-widest uppercase font-bold text-amber-300">
-                      NEURAFORGE
+                {/* Citation Statement */}
+                <div className="text-center max-w-3xl mx-auto space-y-3 my-8">
+                  <p className="text-xs sm:text-sm text-stone-700 leading-relaxed font-sans">
+                    for successfully completing the
+                  </p>
+                  <div className="text-lg sm:text-2xl font-bold font-mono text-[#1A42D9]">
+                    {courseName}
+                  </div>
+                  <p className="text-xs sm:text-sm text-stone-700 font-sans font-medium pt-1">
+                    and successfully completing all required assessments:
+                  </p>
+                </div>
+
+                {/* Three Required Assessments */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto my-8 text-center">
+                  <div className="p-3 bg-white border border-[#111111] text-xs font-mono font-bold text-stone-900 flex items-center justify-center gap-2 shadow-xs">
+                    <Check className="w-4 h-4 text-[#1A42D9] shrink-0" />
+                    <span>20 Quiz Challenges</span>
+                  </div>
+                  <div className="p-3 bg-white border border-[#111111] text-xs font-mono font-bold text-stone-900 flex items-center justify-center gap-2 shadow-xs">
+                    <Check className="w-4 h-4 text-[#1A42D9] shrink-0" />
+                    <span>20 Coding Challenges</span>
+                  </div>
+                  <div className="p-3 bg-white border border-[#111111] text-xs font-mono font-bold text-stone-900 flex items-center justify-center gap-2 shadow-xs">
+                    <Check className="w-4 h-4 text-[#1A42D9] shrink-0" />
+                    <span>20 Debugging Challenges</span>
+                  </div>
+                </div>
+
+                {/* Signatures Section: K AKASH — Founder, Sunny Organization */}
+                <div className="pt-8 border-t-[2px] border-[#111111] mt-10 flex flex-col items-center justify-center text-center">
+                  
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-stone-500 font-bold mb-3">
+                    ISSUED BY
+                  </div>
+
+                  <div className="h-12 flex items-end justify-center">
+                    <span className="font-serif italic text-3xl sm:text-4xl text-stone-900 font-black tracking-wide">
+                      K Akash
                     </span>
-                    <Award className="w-5 h-5 text-amber-300 my-0.5" />
-                    <span className="text-[8px] font-mono font-black tracking-wider">
-                      VERIFIED
-                    </span>
                   </div>
-                </div>
-              </div>
 
-              {/* Signature 2 */}
-              <div className="sm:text-right">
-                <div className="h-10 flex items-end justify-center sm:justify-end">
-                  <span className="font-serif italic text-2xl text-stone-800 font-bold">
-                    Marcus Vance
-                  </span>
-                </div>
-                <div className="border-t border-[#111111] pt-1.5 mt-1">
-                  <div className="text-[11px] font-mono font-bold text-[#111111]">
-                    MARCUS VANCE
+                  <div className="w-64 border-t-2 border-[#111111] pt-2 mt-1 text-center">
+                    <div className="text-sm font-mono font-black text-[#111111] tracking-wider">
+                      K AKASH
+                    </div>
+                    <div className="text-xs font-mono font-bold text-[#1A42D9]">
+                      Founder
+                    </div>
+                    <div className="text-xs font-mono text-stone-600 font-medium">
+                      Sunny Organization
+                    </div>
                   </div>
-                  <div className="text-[10px] font-mono text-stone-500">
-                    Director of Machine Learning Lab
+
+                  {/* Clarification Label as Requested */}
+                  <div className="mt-4 px-3 py-1 bg-stone-100 border border-stone-300 font-mono text-[11px] text-stone-700 font-bold">
+                    “K AKASH — Founder, Sunny Organization”
                   </div>
                 </div>
+
+                {/* Bottom Verification Footer */}
+                <div className="mt-8 pt-4 border-t border-stone-300 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-mono text-stone-600">
+                  <div>
+                    CERTIFICATE ID: <span className="font-bold text-[#111111]">{credentialId}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>VERIFIED ACADEMIC ACCREDITATION</span>
+                  </div>
+                  <div>
+                    COMPLETION DATE: <span className="font-bold text-[#111111]">{issueDate}</span>
+                  </div>
+                </div>
+
               </div>
             </div>
-
-            {/* Bottom Verification Footer */}
-            <div className="mt-8 pt-4 border-t border-stone-300 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-mono text-stone-500">
-              <div>
-                CREDENTIAL ID: <span className="font-bold text-[#111111]">{credentialId}</span>
-              </div>
-              <div>
-                DATE OF ISSUANCE: <span className="font-bold text-[#111111]">{issueDate}</span>
-              </div>
-              <div className="flex items-center gap-1 text-[#1A42D9] font-bold">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>CRYPTOGRAPHICALLY VERIFIED</span>
-              </div>
-            </div>
-
           </div>
+
         </div>
-      </div>
+      )}
 
     </div>
   );

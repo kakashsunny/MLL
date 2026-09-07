@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { QUIZ_QUESTIONS } from '../../data/quizData';
 import { QuizQuestion, ViewMode } from '../../types';
+import { recordQuizCompletion } from '../../services/storageService';
 import confetti from 'canvas-confetti';
 
 interface QuizCenterProps {
@@ -35,6 +36,7 @@ export const QuizCenter: React.FC<QuizCenterProps> = ({ onUpdateXP, onSelectView
 
     const correctIdx = currentQ.correctAnswer ?? currentQ.correctOption ?? 0;
     const isCorrect = idx === correctIdx;
+    recordQuizCompletion(currentQ.id, isCorrect, isCorrect ? 100 : 0, currentQ.xpReward || 150);
     if (isCorrect) {
       setScore(s => s + 1);
       onUpdateXP(currentQ.xpReward || 150);

@@ -27,11 +27,13 @@ import { QuizCenter } from './components/quiz/QuizCenter';
 import { SyntaxLibraryView } from './components/syntax/SyntaxLibraryView';
 import { UserProfilePage } from './components/profile/UserProfilePage';
 import { AdminAuthorizationPanel } from './components/admin/AdminAuthorizationPanel';
-import { AuthProvider } from './contexts/AuthContext';
+import { CertificateView } from './components/certificate/CertificateView';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthModal } from './components/auth/AuthModal';
 
 const AppContent: React.FC = () => {
+  const { syncStats } = useAuth();
   const [currentView, setCurrentView] = useState<ViewMode>('landing');
   const [userProgress, setUserProgress] = useState<UserProgress>(loadUserProgress());
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -44,6 +46,15 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     saveUserProgress(userProgress);
   }, [userProgress]);
+
+  // Daily streak validation and sync on initial load
+  useEffect(() => {
+    const fresh = loadUserProgress();
+    setUserProgress(fresh);
+    if (syncStats) {
+      syncStats(fresh.xp, fresh.streakDays);
+    }
+  }, []);
 
   // Global Keyboard Shortcuts (Cmd+K / Ctrl+K)
   useEffect(() => {
@@ -60,11 +71,17 @@ const AppContent: React.FC = () => {
   const handleUpdateXP = (amount: number) => {
     const updated = awardXP(amount);
     setUserProgress({ ...updated });
+    if (syncStats) {
+      syncStats(updated.xp, updated.streakDays);
+    }
   };
 
   const handleCompleteLesson = (lessonId: string) => {
     const updated = markLessonComplete(lessonId);
     setUserProgress({ ...updated });
+    if (syncStats) {
+      syncStats(updated.xp, updated.streakDays);
+    }
   };
 
   return (
@@ -131,7 +148,25 @@ const AppContent: React.FC = () => {
               )}
 
               {currentView === 'jupyter' && (
-                <JupyterLab />
+                <JupyterLab 
+                  onUpdateXP={handleUpdateXP}
+                  userProgress={userProgress}
+                  onSelectView={setCurrentView}
+                />
+              )}
+
+              {currentView === 'certificate' && (
+                <CertificateView
+                  userProgress={userProgress}
+                  onSelectView={setCurrentView}
+                  onUpdateXP={handleUpdateXP}
+                  onProgressUpdate={(updated) => {
+                    setUserProgress({ ...updated });
+                    if (syncStats) {
+                      syncStats(updated.xp, updated.streakDays);
+                    }
+                  }}
+                />
               )}
 
               {currentView === 'playground' && (

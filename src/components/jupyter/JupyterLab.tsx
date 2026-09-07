@@ -24,12 +24,28 @@ import {
   ExternalLink,
   BookOpen,
   ArrowRight,
-  Terminal
+  Terminal,
+  Award
 } from 'lucide-react';
 import { explainCodeSnippet } from '../../services/geminiService';
 import ReactMarkdown from 'react-markdown';
+import { UserProgress, ViewMode } from '../../types';
+import { JupyterChallengesView } from './JupyterChallengesView';
 
-export const JupyterLab: React.FC = () => {
+interface JupyterLabProps {
+  onUpdateXP?: (amount: number) => void;
+  userProgress?: UserProgress;
+  onSelectView?: (view: ViewMode) => void;
+}
+
+export const JupyterLab: React.FC<JupyterLabProps> = ({
+  onUpdateXP,
+  userProgress,
+  onSelectView
+}) => {
+  // Mode Switcher: Notebook vs Challenges
+  const [activeTab, setActiveTab] = useState<'notebook' | 'challenges'>('notebook');
+
   // Available Notebooks
   const [notebooks, setNotebooks] = useState<JupyterNotebook[]>(STARTER_NOTEBOOKS);
   const [activeNotebookId, setActiveNotebookId] = useState<string>(STARTER_NOTEBOOKS[0].id);
@@ -338,10 +354,28 @@ export const JupyterLab: React.FC = () => {
     showToast('Created new blank Jupyter Notebook');
   };
 
+  // Load code from a challenge into the top of the active notebook
+  const handleLoadIntoNotebook = (code: string, targetNbId?: string) => {
+    if (targetNbId && notebooks.some(n => n.id === targetNbId)) {
+      setActiveNotebookId(targetNbId);
+    }
+    const newCell: NotebookCell = {
+      id: `cell_chal_${Date.now()}`,
+      cellType: 'code',
+      source: code,
+      executionCount: null,
+      outputs: []
+    };
+    updateActiveNotebookCells(cells => [newCell, ...cells]);
+    setSelectedCellId(newCell.id);
+    setActiveTab('notebook');
+    showToast('Challenge code loaded into notebook top cell');
+  };
+
   return (
     <div id="jupyter_lab_container" className="flex flex-col h-full bg-[#F7F5EF] overflow-hidden select-text">
       {/* 1. Global Jupyter Top Header */}
-      <header className="border-b border-[#E5E2D9] bg-white px-4 sm:px-6 py-2.5 flex items-center justify-between shadow-2xs z-20">
+      <header className="border-b border-[#E5E2D9] bg-white px-4 sm:px-6 py-2.5 flex items-center justify-between shadow-2xs z-20 flex-wrap gap-2">
         <div className="flex items-center gap-3">
           {/* Jupyter Brand Logo Mark */}
           <div className="flex items-center gap-2">
@@ -364,72 +398,157 @@ export const JupyterLab: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Mode Switcher: Notebook vs Challenges */}
+          <div className="hidden sm:flex items-center border-[2px] border-[#111111] bg-[#FAF9F5] p-0.5 ml-2">
+            <button
+              onClick={() => setActiveTab('notebook')}
+              className={`px-3 py-1 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'notebook' 
+                  ? 'bg-[#111111] text-white shadow-[1px_1px_0px_0px_#111111]' 
+                  : 'text-stone-700 hover:text-black'
+              }`}
+            >
+              <FileCode className="w-3.5 h-3.5" />
+              <span>Notebook</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('challenges')}
+              className={`px-3 py-1 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'challenges' 
+                  ? 'bg-[#111111] text-white shadow-[1px_1px_0px_0px_#111111]' 
+                  : 'text-stone-700 hover:text-black'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>Challenges ({userProgress?.completedChallenges?.length || 0}/5)</span>
+            </button>
+          </div>
         </div>
 
         {/* Notebook Switcher & Kernel Status */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Notebook Dropdown */}
-          <div className="relative">
-            <select
-              value={activeNotebookId}
-              onChange={(e) => {
-                if (e.target.value === '__new__') {
-                  handleCreateBlankNotebook();
-                } else {
-                  setActiveNotebookId(e.target.value);
-                  const nb = notebooks.find(n => n.id === e.target.value);
-                  if (nb && nb.cells[0]) setSelectedCellId(nb.cells[0].id);
-                  kernelRef.current.reset();
-                  refreshVariables();
-                }
-              }}
-              className="text-xs font-mono font-medium bg-[#FAF9F5] border border-[#E0DCCF] rounded-lg px-3 py-1.5 text-stone-800 focus:outline-none focus:border-[#1A42D9] cursor-pointer"
+          {/* Certificate Quick Jump */}
+          {onSelectView && (
+            <button
+              onClick={() => onSelectView('certificate')}
+              title="View & Export ML Certificate (PDF/PNG)"
+              className="flex items-center gap-1.5 px-3 py-1.5 border-[2px] border-[#111111] bg-white hover:bg-stone-50 text-xs font-mono font-bold text-[#111111] shadow-[2px_2px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
             >
-              <optgroup label="Curated ML Lab Notebooks">
-                {notebooks.map(nb => (
-                  <option key={nb.id} value={nb.id}>
-                    {nb.filename}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Actions">
-                <option value="__new__">+ New Blank Notebook (.ipynb)</option>
-              </optgroup>
-            </select>
-          </div>
+              <Award className="w-3.5 h-3.5 text-[#1A42D9]" />
+              <span className="hidden md:inline">Certificates</span>
+            </button>
+          )}
 
-          {/* Kernel Status Indicator */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[#E5E2D9] bg-[#FAF9F5] text-[11px] font-mono">
-            <span 
-              className={`w-2 h-2 rounded-full ${
-                isKernelBusy ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'
-              }`} 
-            />
-            <span className="text-stone-600 font-medium">
-              {isKernelBusy ? 'Kernel Busy' : 'Python 3 (Idle)'}
-            </span>
-          </div>
+          {activeTab === 'notebook' && (
+            <>
+              {/* Notebook Dropdown */}
+              <div className="relative">
+                <select
+                  value={activeNotebookId}
+                  onChange={(e) => {
+                    if (e.target.value === '__new__') {
+                      handleCreateBlankNotebook();
+                    } else {
+                      setActiveNotebookId(e.target.value);
+                      const nb = notebooks.find(n => n.id === e.target.value);
+                      if (nb && nb.cells[0]) setSelectedCellId(nb.cells[0].id);
+                      kernelRef.current.reset();
+                      refreshVariables();
+                    }
+                  }}
+                  className="text-xs font-mono font-medium bg-[#FAF9F5] border border-[#E0DCCF] rounded-lg px-3 py-1.5 text-stone-800 focus:outline-none focus:border-[#1A42D9] cursor-pointer"
+                >
+                  <optgroup label="Curated ML Lab Notebooks">
+                    {notebooks.map(nb => (
+                      <option key={nb.id} value={nb.id}>
+                        {nb.filename}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Actions">
+                    <option value="__new__">+ New Blank Notebook (.ipynb)</option>
+                  </optgroup>
+                </select>
+              </div>
 
-          {/* Variable Inspector Toggle */}
-          <button
-            onClick={() => setVariableInspectorOpen(prev => !prev)}
-            title="Toggle Variable Inspector"
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium border transition-colors ${
-              variableInspectorOpen 
-                ? 'bg-[#1A42D9] text-white border-[#1A42D9]' 
-                : 'bg-white border-[#E0DCCF] text-stone-700 hover:bg-[#FAF9F5]'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Variables</span>
-            <span className="px-1 py-0.2 rounded text-[10px] bg-white/20">
-              {variables.length}
-            </span>
-          </button>
+              {/* Kernel Status Indicator */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[#E5E2D9] bg-[#FAF9F5] text-[11px] font-mono">
+                <span 
+                  className={`w-2 h-2 rounded-full ${
+                    isKernelBusy ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'
+                  }`} 
+                />
+                <span className="text-stone-600 font-medium">
+                  {isKernelBusy ? 'Kernel Busy' : 'Python 3 (Idle)'}
+                </span>
+              </div>
+
+              {/* Variable Inspector Toggle */}
+              <button
+                onClick={() => setVariableInspectorOpen(prev => !prev)}
+                title="Toggle Variable Inspector"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium border transition-colors ${
+                  variableInspectorOpen 
+                    ? 'bg-[#1A42D9] text-white border-[#1A42D9]' 
+                    : 'bg-white border-[#E0DCCF] text-stone-700 hover:bg-[#FAF9F5]'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Variables</span>
+                <span className="px-1 py-0.2 rounded text-[10px] bg-white/20">
+                  {variables.length}
+                </span>
+              </button>
+            </>
+          )}
+
+          {activeTab === 'challenges' && (
+            <button
+              onClick={() => setActiveTab('notebook')}
+              className="px-3 py-1.5 border-[2px] border-[#111111] bg-[#111111] text-white text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <FileCode className="w-3.5 h-3.5" />
+              <span>Back to Notebook</span>
+            </button>
+          )}
         </div>
       </header>
 
-      {/* 2. Classic Jupyter Interactive Action Toolbar */}
+      {/* Mobile Mode Switcher */}
+      <div className="sm:hidden flex border-b border-[#E5E2D9] bg-white p-1">
+        <button
+          onClick={() => setActiveTab('notebook')}
+          className={`flex-1 py-1.5 text-xs font-mono font-bold text-center ${
+            activeTab === 'notebook' ? 'bg-[#111111] text-white' : 'text-stone-700'
+          }`}
+        >
+          Notebook
+        </button>
+        <button
+          onClick={() => setActiveTab('challenges')}
+          className={`flex-1 py-1.5 text-xs font-mono font-bold text-center ${
+            activeTab === 'challenges' ? 'bg-[#111111] text-white' : 'text-stone-700'
+          }`}
+        >
+          Challenges ({userProgress?.completedChallenges?.length || 0}/5)
+        </button>
+      </div>
+
+      {/* Main View: Challenges vs Notebook */}
+      {activeTab === 'challenges' ? (
+        <div className="flex-1 overflow-y-auto bg-[#F7F5EF]">
+          <JupyterChallengesView
+            onLoadIntoNotebook={handleLoadIntoNotebook}
+            onUpdateXP={onUpdateXP}
+            userProgress={userProgress}
+            onSelectView={onSelectView}
+            onSwitchToNotebook={() => setActiveTab('notebook')}
+          />
+        </div>
+      ) : (
+        <>
+          {/* 2. Classic Jupyter Interactive Action Toolbar */}
       <div className="border-b border-[#E5E2D9] bg-[#FAF9F5] px-4 sm:px-6 py-1.5 flex items-center justify-between gap-2 overflow-x-auto select-none">
         <div className="flex items-center gap-1 sm:gap-2">
           {/* Save Button */}
@@ -693,6 +812,8 @@ export const JupyterLab: React.FC = () => {
             </button>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

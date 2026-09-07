@@ -47,6 +47,16 @@ export interface UserProgress {
   streakDays: number;
   completedLessons: string[];
   completedQuizzes: string[];
+  completedCodingChallenges?: string[];
+  completedDebuggingChallenges?: string[];
+  assessmentScores?: {
+    quizzes: Record<string, number>;
+    coding: Record<string, boolean>;
+    debugging: Record<string, boolean>;
+  };
+  certificateClaimed?: boolean;
+  certificateClaimedAt?: string;
+  certificateId?: string;
   completedProjects: string[];
   completedChallenges: string[];
   lastActiveDate: string;
@@ -55,6 +65,47 @@ export interface UserProgress {
   learningHours: number;
   quizAccuracy: number;
   experimentsRunCount?: number;
+}
+
+export interface AssessmentQuizItem {
+  id: string;
+  title: string;
+  category: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  question: string;
+  codeSnippet?: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+  xpReward: number;
+}
+
+export interface AssessmentCodingItem {
+  id: string;
+  title: string;
+  category: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  description: string;
+  functionSignature: string;
+  starterCode: string;
+  solutionCode: string;
+  hint: string;
+  testCasesDescription: string;
+  xpReward: number;
+}
+
+export interface AssessmentDebuggingItem {
+  id: string;
+  title: string;
+  category: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  description: string;
+  bugExplanation: string;
+  brokenCode: string;
+  fixedCode: string;
+  hint: string;
+  testCasesDescription: string;
+  xpReward: number;
 }
 
 export interface RoadmapNode {

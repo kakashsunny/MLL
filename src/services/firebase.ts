@@ -4,6 +4,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider, 
   signOut as firebaseSignOut, 
   onAuthStateChanged,
@@ -27,14 +29,20 @@ import {
 } from 'firebase/firestore';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
-// Initialize Firebase App
-const firebaseConfig = {
-  apiKey: firebaseConfigJson.apiKey,
-  authDomain: firebaseConfigJson.authDomain,
-  projectId: firebaseConfigJson.projectId,
-  storageBucket: firebaseConfigJson.storageBucket,
-  messagingSenderId: firebaseConfigJson.messagingSenderId,
-  appId: firebaseConfigJson.appId
+// Project ID constant for diagnostics and console links
+export const FIREBASE_PROJECT_ID = 
+  import.meta.env.VITE_FIREBASE_PROJECT_ID || 
+  firebaseConfigJson?.projectId || 
+  'gen-lang-client-0928069600';
+
+// Initialize Firebase App with JSON config and Vercel/Vite env overrides
+export const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigJson?.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJson?.authDomain,
+  projectId: FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigJson?.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJson?.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigJson?.appId
 };
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -43,8 +51,9 @@ export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfi
 export const auth = getAuth(app);
 
 // Initialize Firestore (utilizing dedicated databaseId if provided)
-export const db = firebaseConfigJson.firestoreDatabaseId 
-  ? getFirestore(app, firebaseConfigJson.firestoreDatabaseId)
+const firestoreDbId = import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfigJson?.firestoreDatabaseId;
+export const db = firestoreDbId 
+  ? getFirestore(app, firestoreDbId)
   : getFirestore(app);
 
 // Google Auth Provider
@@ -137,21 +146,26 @@ export async function fetchUserProfile(uid: string): Promise<UserProfile | null>
 export async function syncUserProfile(
   user: FirebaseUser, 
   customRole?: UserRole, 
-  initialDisplayName?: string
+  initialDisplayName?: string,
+  localXp?: number,
+  localStreak?: number
 ): Promise<UserProfile> {
   const userDocRef = doc(db, 'users', user.uid);
   const existing = await fetchUserProfile(user.uid);
 
   const now = new Date().toISOString();
+  const mergedXp = Math.max(existing?.xp ?? 0, localXp ?? 0);
+  const mergedStreak = Math.max(existing?.streak ?? 0, localStreak ?? 0, 1);
+
   const profile: UserProfile = {
     id: user.uid,
     email: user.email || (user.isAnonymous ? `guest_${user.uid.slice(0, 6)}@neuraforge.ai` : 'user@neuraforge.ai'),
     displayName: initialDisplayName || user.displayName || existing?.displayName || (user.isAnonymous ? 'Guest Explorer' : 'ML Practitioner'),
     photoURL: user.photoURL || existing?.photoURL || undefined,
     role: customRole || existing?.role || (user.email?.includes('admin') ? 'admin' : 'researcher'),
-    xp: existing?.xp ?? 0,
-    streak: existing?.streak ?? 0,
-    tier: existing?.tier || 'ML Explorer',
+    xp: mergedXp,
+    streak: mergedStreak,
+    tier: existing?.tier || (mergedXp >= 18000 ? 'Deep Learning Engineer' : mergedXp >= 12000 ? 'Algorithm Architect' : mergedXp >= 6000 ? 'Model Builder' : 'ML Explorer'),
     createdAt: existing?.createdAt || now,
     lastLoginAt: now,
     isAnonymous: user.isAnonymous
@@ -164,6 +178,19 @@ export async function syncUserProfile(
   }
 
   return profile;
+}
+
+export async function updateUserStats(uid: string, xp: number, streak: number): Promise<void> {
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    await updateDoc(userDocRef, {
+      xp,
+      streak,
+      lastLoginAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.warn('Could not update user stats in Firestore:', err);
+  }
 }
 
 export async function updateUserRole(uid: string, newRole: UserRole): Promise<void> {
@@ -210,6 +237,8 @@ export {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   googleProvider,
   firebaseSignOut,
   onAuthStateChanged,

@@ -1,0 +1,6 @@
+{
+  "name": "NeuraForge",
+  "description": "World-class interactive Machine Learning education platform and learning operating system",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

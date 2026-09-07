@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile and role-based permissions metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "User Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "Primary email address" },
+        "displayName": { "type": "string", "description": "Display name or handle" },
+        "photoURL": { "type": "string", "description": "Profile avatar image URL" },
+        "role": { "type": "string", "enum": ["admin", "researcher", "student"], "description": "Authorization role" },
+        "xp": { "type": "number", "description": "Total experience points" },
+        "streak": { "type": "number", "description": "Daily learning streak in days" },
+        "tier": { "type": "string", "description": "Skill mastery level" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of account creation" },
+        "lastLoginAt": { "type": "string", "description": "ISO timestamp of last sign in" }
+      },
+      "required": ["id", "email", "role"]
+    },
+    "NotebookDocument": {
+      "title": "NotebookDocument",
+      "description": "Persistent Jupyter notebook authored by a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique notebook identifier" },
+        "userId": { "type": "string", "description": "Author UID" },
+        "title": { "type": "string", "description": "Notebook title" },
+        "filename": { "type": "string", "description": "Filename ending in .ipynb" },
+        "description": { "type": "string", "description": "Notebook synopsis" },
+        "kernelName": { "type": "string", "description": "Kernel name e.g. python3" },
+        "cells": { "type": "array", "description": "Serialized notebook cells" },
+        "tags": { "type": "array", "description": "Topic tags" },
+        "updatedAt": { "type": "string", "description": "Last modified timestamp" }
+      },
+      "required": ["id", "userId", "title", "filename"]
+    },
+    "UserProgress": {
+      "title": "UserProgress",
+      "description": "Curriculum tracking and quiz performance record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "User identifier" },
+        "completedLessons": { "type": "array", "description": "Array of completed lesson IDs" },
+        "quizScores": { "type": "object", "description": "Map of lesson ID to score" },
+        "lastLessonId": { "type": "string", "description": "Most recently visited lesson" },
+        "updatedAt": { "type": "string", "description": "Timestamp of last progress update" }
+      },
+      "required": ["userId"]
+    },
+    "AdminAuditLog": {
+      "title": "AdminAuditLog",
+      "description": "System security and administrative audit logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique log entry ID" },
+        "actorId": { "type": "string", "description": "UID of the user performing the action" },
+        "actorEmail": { "type": "string", "description": "Email of actor" },
+        "actorRole": { "type": "string", "description": "Role of actor at action time" },
+        "action": { "type": "string", "description": "Action performed e.g. ROLE_CHANGE, PROMPT_RUN" },
+        "details": { "type": "string", "description": "Event metadata" },
+        "timestamp": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "actorId", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile with role-based access information"
+    },
+    "/users/{userId}/notebooks/{notebookId}": {
+      "schema": "NotebookDocument",
+      "description": "Notebook documents authored and managed by the user"
+    },
+    "/users/{userId}/progress/{progressDocId}": {
+      "schema": "UserProgress",
+      "description": "User curriculum progression and mastery records"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AdminAuditLog",
+      "description": "System-wide administrative events and security audits"
+    }
+  }
+}

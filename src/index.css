@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-serif: 'Newsreader', Georgia, serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Light Theme Palette */
+    --bg-base: #F7F5EF;
+    --bg-surface: #FFFFFF;
+    --bg-subtle: #FAF8F2;
+    --bg-muted: #F0EDE4;
+    --bg-input: #FAF9F5;
+    --text-primary: #111111;
+    --text-secondary: #57534E;
+    --text-muted: #78716C;
+    --border-subtle: #E5E2D9;
+    --border-strong: #111111;
+    --color-primary: #1A42D9;
+    --color-primary-hover: #1535B0;
+    --scrollbar-track: #F0EDE4;
+    --scrollbar-thumb: #D2CDC2;
+    --scrollbar-thumb-hover: #B5AFA2;
+    --grid-line: rgba(17, 17, 17, 0.04);
+    --dot-color: rgba(17, 17, 17, 0.08);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    overflow-x: hidden;
+    transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  code, pre, kbd {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Minimalist Editorial Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Subtle Technical Paper Grid */
+.bg-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+}
+
+.bg-dot-pattern {
+  background-size: 24px 24px;
+  background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
+}
+
+/* Editorial paper surface & crisp border */
+.editorial-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.editorial-card-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.editorial-card-hover:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.12);
+}
+
+/* Brutalist Card Design: 3px solid border, hard offset shadows, rectangular geometry, generous spacing */
+.brutalist-card {
+  background-color: var(--bg-surface);
+  border: 3px solid var(--border-strong);
+  box-shadow: 4px 4px 0px 0px var(--border-strong);
+  border-radius: 0px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.brutalist-card-interactive {
+  background-color: var(--bg-surface);
+  border: 3px solid var(--border-strong);
+  box-shadow: 4px 4px 0px 0px var(--border-strong);
+  border-radius: 0px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.brutalist-card-interactive:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px 0px var(--border-strong);
+}
+
+.brutalist-card-inset {
+  border: 3px solid var(--border-strong);
+  box-shadow: 3px 3px 0px 0px var(--border-strong);
+  border-radius: 0px;
+}
+
+/* Backwards compatibility aliases for existing components */
+.bento-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.bento-card-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bento-card-hover:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.12);
+}
+
+.glass-panel {
+  background: var(--bg-surface);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+.glass-panel-hover:hover {
+  border-color: var(--border-strong);
+}
+

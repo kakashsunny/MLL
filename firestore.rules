@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.role == 'admin') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         getUserData().role == 'admin')
+      );
+    }
+
+    // Connection test document (allowed for verifying Firestore setup)
+    match /test/{documentId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Users collection and profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+
+      // User's private notebooks
+      match /notebooks/{notebookId} {
+        allow read, write: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      }
+
+      // User's learning progress
+      match /progress/{progressDocId} {
+        allow read, write: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      }
+    }
+
+    // Administrative audit logs
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable log records
+    }
+  }
+}

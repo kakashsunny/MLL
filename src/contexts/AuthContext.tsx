@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   auth, 
   onAuthStateChanged, 
@@ -27,7 +27,8 @@ import { User as FirebaseUser } from 'firebase/auth';
 import { 
   getStoredProgress, 
   saveUserProgress, 
-  checkAndUpdateDailyStreak 
+  checkAndUpdateDailyStreak,
+  syncProgressFromFirebase
 } from '../services/storageService';
 
 interface AuthContextType {
@@ -53,7 +54,7 @@ interface AuthContextType {
 }
 
 const getInitialProfile = (): UserProfile => {
-  const local = checkAndUpdateDailyStreak();
+  const local = getStoredProgress();
   return {
     id: 'guest_demo',
     email: 'researcher@neuraforge.ai',
@@ -85,14 +86,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .then(async (cred) => {
         if (cred && cred.user) {
           try {
-            const local = checkAndUpdateDailyStreak();
-            const synced = await syncUserProfile(cred.user, undefined, undefined, local.xp, local.streakDays);
+            const syncedProgress = await syncProgressFromFirebase(cred.user.uid);
+            const synced = await syncUserProfile(cred.user, undefined, undefined, syncedProgress.xp, syncedProgress.streakDays);
             setProfile(synced);
-            saveUserProgress({
-              ...local,
-              xp: synced.xp,
-              streakDays: synced.streak
-            });
             recordSystemAuditLog(cred.user.uid, cred.user.email || '', synced.role, 'LOGIN_GOOGLE_REDIRECT', 'Google OAuth redirect authentication completed');
             setIsAuthModalOpen(false);
           } catch (e) {
@@ -111,14 +107,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(currentUser);
       if (currentUser) {
         try {
-          const local = checkAndUpdateDailyStreak();
-          const synced = await syncUserProfile(currentUser, undefined, undefined, local.xp, local.streakDays);
+          const syncedProgress = await syncProgressFromFirebase(currentUser.uid);
+          const synced = await syncUserProfile(currentUser, undefined, undefined, syncedProgress.xp, syncedProgress.streakDays);
           setProfile(synced);
-          saveUserProgress({
-            ...local,
-            xp: synced.xp,
-            streakDays: synced.streak
-          });
         } catch (err) {
           console.warn('Profile sync fallback:', err);
           const local = checkAndUpdateDailyStreak();
@@ -280,13 +271,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const syncStats = async (newXp: number, newStreak: number) => {
-    setProfile(prev => prev ? {
-      ...prev,
-      xp: newXp,
-      streak: newStreak,
-      tier: newXp >= 18000 ? 'Deep Learning Engineer' : newXp >= 12000 ? 'Algorithm Architect' : newXp >= 6000 ? 'Model Builder' : 'ML Explorer'
-    } : null);
+  const syncStats = useCallback(async (newXp: number, newStreak: number) => {
+    setProfile(prev => {
+      if (!prev) return null;
+      if (prev.xp === newXp && prev.streak === newStreak) return prev;
+      return {
+        ...prev,
+        xp: newXp,
+        streak: newStreak,
+        tier: newXp >= 18000 ? 'Deep Learning Engineer' : newXp >= 12000 ? 'Algorithm Architect' : newXp >= 6000 ? 'Model Builder' : 'ML Explorer'
+      };
+    });
 
     if (user && !user.isAnonymous) {
       try {
@@ -295,7 +290,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('Stats sync to Firestore notice:', err);
       }
     }
-  };
+  }, [user]);
 
   const activeRole: UserRole = profile?.role || 'student';
   const permissions = ROLE_PERMISSIONS[activeRole];

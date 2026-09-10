@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ViewMode, UserProgress } from './types';
-import { loadUserProgress, saveUserProgress, awardXP, markLessonComplete, DEFAULT_PROGRESS } from './services/storageService';
+import { 
+  getStoredProgress,
+  checkAndUpdateDailyStreak,
+  saveUserProgress,
+  awardXP, 
+  markLessonComplete, 
+  DEFAULT_PROGRESS,
+  subscribeToProgressUpdates
+} from './services/storageService';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
 import { CommandPalette } from './components/navigation/CommandPalette';
@@ -34,34 +42,81 @@ import { AuthModal } from './components/auth/AuthModal';
 
 const AppContent: React.FC = () => {
   const { syncStats } = useAuth();
-  const [currentView, setCurrentView] = useState<ViewMode>('landing');
-  const [userProgress, setUserProgress] = useState<UserProgress>(loadUserProgress());
+  const [currentView, setCurrentView] = useState<ViewMode>(() => {
+    if (typeof window !== 'undefined' && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('verify') || params.get('certificateId')) {
+        return 'certificate';
+      }
+    }
+    return 'landing';
+  });
+  const [userProgress, setUserProgress] = useState<UserProgress>(() => getStoredProgress());
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('neuraforge_sidebar_collapsed') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Sync progress to localStorage
-  useEffect(() => {
-    saveUserProgress(userProgress);
-  }, [userProgress]);
+  const handleToggleSidebar = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('neuraforge_sidebar_collapsed', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
-  // Daily streak validation and sync on initial load
+  // Daily streak validation and stats sync on mount
   useEffect(() => {
-    const fresh = loadUserProgress();
+    const fresh = checkAndUpdateDailyStreak();
     setUserProgress(fresh);
     if (syncStats) {
       syncStats(fresh.xp, fresh.streakDays);
     }
   }, []);
 
-  // Global Keyboard Shortcuts (Cmd+K / Ctrl+K)
+  // Subscribe to background progress updates (e.g. remote Firebase cloud sync)
+  useEffect(() => {
+    const unsubscribe = subscribeToProgressUpdates((latest) => {
+      setUserProgress(prev => {
+        if (
+          prev.xp !== latest.xp ||
+          prev.streakDays !== latest.streakDays ||
+          prev.completedLessons.length !== latest.completedLessons.length ||
+          prev.completedQuizzes.length !== latest.completedQuizzes.length ||
+          (prev.completedCodingChallenges?.length || 0) !== (latest.completedCodingChallenges?.length || 0) ||
+          (prev.completedDebuggingChallenges?.length || 0) !== (latest.completedDebuggingChallenges?.length || 0) ||
+          prev.certificateClaimed !== latest.certificateClaimed
+        ) {
+          return latest;
+        }
+        return prev;
+      });
+      if (syncStats) {
+        syncStats(latest.xp, latest.streakDays);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Global Keyboard Shortcuts (Cmd+K / Ctrl+K for Search, Cmd+B / Ctrl+B for Sidebar)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCommandPaletteOpen(prev => !prev);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        handleToggleSidebar();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -104,7 +159,7 @@ const AppContent: React.FC = () => {
             userProgress={userProgress}
             onOpenSearch={() => setCommandPaletteOpen(true)}
             isCollapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+            onToggleCollapse={handleToggleSidebar}
             streakCount={userProgress.streakDays}
             onOpenProfile={() => setIsProfileOpen(true)}
             onRestartTutorial={() => setIsTourOpen(true)}
@@ -126,6 +181,8 @@ const AppContent: React.FC = () => {
               onOpenProfile={() => setIsProfileOpen(true)}
               onRestartTutorial={() => setIsTourOpen(true)}
               onToggleMobile={() => setIsMobileMenuOpen(prev => !prev)}
+              isSidebarCollapsed={isSidebarCollapsed}
+              onToggleSidebar={handleToggleSidebar}
             />
 
             {/* View Port Router */}

@@ -57,9 +57,12 @@ export interface UserProgress {
   certificateClaimed?: boolean;
   certificateClaimedAt?: string;
   certificateId?: string;
+  certificateRecipientName?: string;
   completedProjects: string[];
   completedChallenges: string[];
   lastActiveDate: string;
+  lastLoginTimestamp?: number;
+  lastLoginDate?: string;
   bookmarkedTopics: string[];
   conceptMastery: Record<string, number>; // topic -> percentage 0-100
   learningHours: number;

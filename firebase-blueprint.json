@@ -37,11 +37,17 @@
     },
     "UserProgress": {
       "title": "UserProgress",
-      "description": "Curriculum tracking and quiz performance record",
+      "description": "Curriculum tracking, XP, streak, and quiz performance record",
       "type": "object",
       "properties": {
         "userId": { "type": "string", "description": "User identifier" },
+        "xp": { "type": "number", "description": "Total experience points earned" },
+        "streakDays": { "type": "number", "description": "Consecutive days active streak" },
+        "lastLoginTimestamp": { "type": "number", "description": "Epoch millisecond timestamp of last activity" },
         "completedLessons": { "type": "array", "description": "Array of completed lesson IDs" },
+        "completedQuizzes": { "type": "array", "description": "Array of completed quiz IDs" },
+        "completedCodingChallenges": { "type": "array", "description": "Array of completed coding challenge IDs" },
+        "completedDebuggingChallenges": { "type": "array", "description": "Array of completed debugging challenge IDs" },
         "quizScores": { "type": "object", "description": "Map of lesson ID to score" },
         "lastLessonId": { "type": "string", "description": "Most recently visited lesson" },
         "updatedAt": { "type": "string", "description": "Timestamp of last progress update" }

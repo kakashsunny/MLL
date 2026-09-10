@@ -27,7 +27,10 @@ import {
   ShieldCheck,
   Award,
   Menu,
-  X
+  X,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelLeft
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -50,6 +53,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectView,
   userProgress,
   onOpenSearch,
+  isCollapsed = false,
+  onToggleCollapse,
   onOpenProfile,
   onRestartTutorial,
   isMobileOpen = false,
@@ -290,10 +295,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Desktop Editorial Sidebar - pinned neatly inside view container */}
+      {/* Desktop Editorial Sidebar - collapsible */}
       <aside 
         id="desktop_sidebar"
-        className="hidden lg:flex flex-col w-64 border-r border-[#E5E2D9] bg-[#FAF8F2] h-full flex-shrink-0 z-30 select-none"
+        aria-label="Main Navigation"
+        className={`hidden lg:flex flex-col border-r border-[#E5E2D9] bg-[#FAF8F2] h-full flex-shrink-0 z-30 select-none transition-all duration-300 ease-in-out ${
+          isCollapsed ? 'w-0 opacity-0 overflow-hidden border-r-0 pointer-events-none' : 'w-64 opacity-100'
+        }`}
       >
         {/* Brand Header */}
         <div className="p-4 border-b border-[#E5E2D9] flex items-center justify-between flex-shrink-0">
@@ -312,6 +320,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="text-[9px] block text-stone-400 font-mono tracking-widest uppercase">LABORATORY</span>
             </div>
           </button>
+
+          {/* Close Sidebar button on desktop */}
+          {onToggleCollapse && (
+            <button
+              id="sidebar_collapse_btn"
+              onClick={onToggleCollapse}
+              className="p-1.5 rounded-md hover:bg-stone-200/60 text-stone-500 hover:text-[#111111] transition-colors cursor-pointer"
+              title="Close sidebar (⌘B)"
+              aria-label="Close sidebar"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {renderNavList()}
@@ -358,71 +379,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </aside>
         </div>
       )}
-
-      {/* Mobile Bottom Navigation */}
-      <nav 
-        id="mobile_bottom_nav"
-        className="lg:hidden fixed bottom-7 left-0 right-0 z-30 bg-[#FAF8F2]/95 backdrop-blur-md border-t border-[#E5E2D9] px-2 py-1.5 flex items-center justify-around select-none"
-      >
-        <button
-          onClick={() => onSelectView('landing')}
-          className={`flex flex-col items-center gap-0.5 p-1 text-[10px] font-medium cursor-pointer ${
-            currentView === 'landing' ? 'text-[#1A42D9] font-bold' : 'text-stone-500'
-          }`}
-        >
-          <span>Home</span>
-        </button>
-
-        <button
-          onClick={() => onSelectView('dashboard')}
-          className={`flex flex-col items-center gap-0.5 p-1 text-[10px] font-medium cursor-pointer ${
-            currentView === 'dashboard' ? 'text-[#1A42D9] font-bold' : 'text-stone-500'
-          }`}
-        >
-          <LayoutDashboard className="w-4 h-4" />
-          <span>Overview</span>
-        </button>
-
-        <button
-          onClick={() => onSelectView('course')}
-          className={`flex flex-col items-center gap-0.5 p-1 text-[10px] font-medium cursor-pointer ${
-            currentView === 'course' ? 'text-[#1A42D9] font-bold' : 'text-stone-500'
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Learn</span>
-        </button>
-
-        <button
-          onClick={() => onSelectView('lab')}
-          className={`flex flex-col items-center gap-0.5 p-1 text-[10px] font-medium cursor-pointer ${
-            currentView === 'lab' ? 'text-[#1A42D9] font-bold' : 'text-stone-500'
-          }`}
-        >
-          <FlaskConical className="w-4 h-4" />
-          <span>ML Lab</span>
-        </button>
-
-        <button
-          onClick={() => onSelectView('playground')}
-          className={`flex flex-col items-center gap-0.5 p-1 text-[10px] font-medium cursor-pointer ${
-            currentView === 'playground' ? 'text-[#1A42D9] font-bold' : 'text-stone-500'
-          }`}
-        >
-          <Terminal className="w-4 h-4" />
-          <span>Code</span>
-        </button>
-
-        <button
-          onClick={() => {
-            if (onToggleMobile) onToggleMobile();
-          }}
-          className="flex flex-col items-center gap-0.5 p-1 text-[10px] font-medium text-stone-500 hover:text-[#1A42D9] cursor-pointer"
-        >
-          <Menu className="w-4 h-4" />
-          <span>Menu</span>
-        </button>
-      </nav>
     </>
   );
 };

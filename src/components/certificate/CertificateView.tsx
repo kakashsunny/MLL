@@ -6,6 +6,9 @@ import {
   recordCodingCompletion, 
   recordDebuggingCompletion, 
   claimCertificateRecord,
+  verifyCertificateRecord,
+  updateCertificateRecipientName,
+  CertificateVerificationRecord,
   saveProgress 
 } from '../../services/storageService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -41,9 +44,21 @@ import {
   ArrowRight,
   ChevronRight,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Search,
+  FileCheck,
+  XCircle,
+  ShieldAlert,
+  QrCode,
+  X,
+  Share2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import {
+  generateCertificateQrCode,
+  drawQrCodeOnCanvas,
+  getCertificateVerificationUrl
+} from '../../utils/qrCodeGenerator';
 
 interface CertificateViewProps {
   userProgress: UserProgress;
@@ -52,7 +67,7 @@ interface CertificateViewProps {
   onProgressUpdate?: (progress: UserProgress) => void;
 }
 
-type TabMode = 'dashboard' | 'quiz' | 'coding' | 'debugging' | 'certificate';
+type TabMode = 'dashboard' | 'quiz' | 'coding' | 'debugging' | 'certificate' | 'verify';
 
 export const CertificateView: React.FC<CertificateViewProps> = ({
   userProgress,
@@ -67,7 +82,7 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
 
   // Customization & Credential State
   const [recipientName, setRecipientName] = useState(
-    user?.displayName || authProfile?.displayName || profile.name || 'ML Practitioner'
+    userProgress.certificateRecipientName || user?.displayName || authProfile?.displayName || profile.name || 'ML Practitioner'
   );
   const courseName = 'Machine Learning & First-Principles Engineering';
   const [issueDate, setIssueDate] = useState(() => {
@@ -82,12 +97,69 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
   });
 
   const [credentialId, setCredentialId] = useState<string>(() => {
-    return userProgress.certificateId || `SO-ML-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+    return userProgress.certificateId || `FFA-ML-2026-${Math.floor(100000 + Math.random() * 900000)}`;
   });
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [isExportingPng, setIsExportingPng] = useState(false);
   const certRef = useRef<HTMLDivElement>(null);
+
+  // QR Code State
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [copiedQrUrl, setCopiedQrUrl] = useState(false);
+
+  // Generate QR Code data URL when credential ID changes
+  useEffect(() => {
+    let isMounted = true;
+    generateCertificateQrCode(credentialId, { width: 320, margin: 1 })
+      .then(url => {
+        if (isMounted) setQrCodeDataUrl(url);
+      })
+      .catch(err => console.error('Failed to generate certificate QR code:', err));
+    return () => { isMounted = false; };
+  }, [credentialId]);
+
+  // Read URL search params to auto-verify if opened via QR code scan
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      const verifyTarget = params.get('verify') || params.get('certificateId');
+      if (verifyTarget) {
+        setVerificationInput(verifyTarget);
+        handleRunVerification(verifyTarget);
+        setActiveTab('verify');
+      }
+    }
+  }, []);
+
+  const handleCopyQrUrl = () => {
+    const url = getCertificateVerificationUrl(credentialId);
+    navigator.clipboard.writeText(url);
+    setCopiedQrUrl(true);
+    setTimeout(() => setCopiedQrUrl(false), 2500);
+  };
+
+  const handleDownloadQrImage = () => {
+    if (!qrCodeDataUrl) return;
+    const link = document.createElement('a');
+    link.download = `QRCode_${credentialId}.png`;
+    link.href = qrCodeDataUrl;
+    link.click();
+  };
+
+  // Verification Search State
+  const [verificationInput, setVerificationInput] = useState('');
+  const [verificationResult, setVerificationResult] = useState<CertificateVerificationRecord | null>(null);
+  const [hasSearchedVerification, setHasSearchedVerification] = useState(false);
+
+  const handleRunVerification = (idToTest?: string) => {
+    const target = (idToTest !== undefined ? idToTest : verificationInput).trim();
+    if (!target) return;
+    const result = verifyCertificateRecord(target);
+    setVerificationResult(result);
+    setHasSearchedVerification(true);
+  };
 
   // Stage 1: Quiz State
   const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
@@ -206,7 +278,7 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
       setCodingEvalResult(result);
 
       if (result.passed) {
-        const updated = recordCodingCompletion(currentCoding.id, currentCoding.xpReward);
+        const updated = recordCodingCompletion(currentCoding.id, true, currentCoding.xpReward);
         if (onProgressUpdate) onProgressUpdate(updated);
         if (onUpdateXP) onUpdateXP(currentCoding.xpReward);
         try {
@@ -231,7 +303,7 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
       setDebuggingEvalResult(result);
 
       if (result.passed) {
-        const updated = recordDebuggingCompletion(currentDebugging.id, currentDebugging.xpReward);
+        const updated = recordDebuggingCompletion(currentDebugging.id, true, currentDebugging.xpReward);
         if (onProgressUpdate) onProgressUpdate(updated);
         if (onUpdateXP) onUpdateXP(currentDebugging.xpReward);
         try {
@@ -249,7 +321,7 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
   const handleClaimCertificate = () => {
     if (!isEligible) return;
 
-    const generatedId = `SO-ML-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+    const generatedId = userProgress.certificateId || `FFA-ML-2026-${Math.floor(100000 + Math.random() * 900000)}`;
     setCredentialId(generatedId);
     const currentDate = new Date().toLocaleDateString('en-US', {
       month: 'long',
@@ -258,7 +330,7 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
     });
     setIssueDate(currentDate);
 
-    const updated = claimCertificateRecord(generatedId);
+    const updated = claimCertificateRecord(generatedId, recipientName);
     if (onProgressUpdate) onProgressUpdate(updated);
     if (onUpdateXP) onUpdateXP(1000); // 1,000 XP Capstone Completion Reward
 
@@ -417,44 +489,103 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
       });
 
       // 8. Signatures & Issuer (K AKASH — Founder, Sunny Organization)
-      const bottomY = 1260;
+      const bottomY = 1250;
 
       // Sole Issuer: K AKASH
       ctx.textAlign = 'center';
       ctx.fillStyle = '#111111';
-      ctx.font = 'italic bold 44px "Newsreader", serif';
+      ctx.font = 'italic bold 46px "Newsreader", serif';
       ctx.fillText('K Akash', width / 2, bottomY);
 
       ctx.strokeStyle = '#111111';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(width / 2 - 250, bottomY + 20);
-      ctx.lineTo(width / 2 + 250, bottomY + 20);
+      ctx.moveTo(width / 2 - 250, bottomY + 18);
+      ctx.lineTo(width / 2 + 250, bottomY + 18);
       ctx.stroke();
 
       ctx.font = 'bold 24px "JetBrains Mono", monospace';
       ctx.fillStyle = '#111111';
-      ctx.fillText('K AKASH', width / 2, bottomY + 60);
+      ctx.fillText('K AKASH', width / 2, bottomY + 55);
 
       ctx.font = 'bold 20px "Plus Jakarta Sans", sans-serif';
       ctx.fillStyle = '#1A42D9';
-      ctx.fillText('Founder', width / 2, bottomY + 95);
+      ctx.fillText('Founder', width / 2, bottomY + 88);
 
       ctx.font = '500 20px "Plus Jakarta Sans", sans-serif';
       ctx.fillStyle = '#444444';
-      ctx.fillText('Sunny Organization', width / 2, bottomY + 130);
+      ctx.fillText('Sunny Organization', width / 2, bottomY + 118);
 
-      // Left: Verification Credential ID
+      ctx.font = 'bold 20px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#111111';
+      ctx.fillText('“K AKASH — Founder, Sunny Organization”', width / 2, bottomY + 155);
+
+      // Official Institutional Seal (Right Side)
+      const sealX = width - 360;
+      const sealY = bottomY + 40;
+      ctx.save();
+      ctx.strokeStyle = '#111111';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(sealX, sealY, 68, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#1A42D9';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sealX, sealY, 60, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 13px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#111111';
+      ctx.fillText('SUNNY ORG', sealX, sealY - 14);
+      ctx.fillText('★ VERIFIED ★', sealX, sealY + 4);
+      ctx.fillText('ACADEMIC 2026', sealX, sealY + 22);
+      ctx.restore();
+
+      // Left: Security Barcode Pattern & Verification Credential ID
+      const barcodeX = 180;
+      const barcodeY = bottomY;
+      for (let i = 0; i < 36; i++) {
+        const lineW = (i % 3 === 0 ? 4 : (i % 2 === 0 ? 2 : 1));
+        ctx.fillStyle = '#111111';
+        ctx.fillRect(barcodeX + i * 5, barcodeY, lineW, 36);
+      }
+
       ctx.textAlign = 'left';
-      ctx.font = 'bold 18px "JetBrains Mono", monospace';
-      ctx.fillStyle = '#666666';
-      ctx.fillText(`CREDENTIAL ID: ${credentialId}`, 180, 1480);
-      ctx.fillText(`STATUS: VERIFIED ACADEMIC ACCREDITATION`, 180, 1515);
+      ctx.font = 'bold 17px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#333333';
+      ctx.fillText(`CREDENTIAL ID: ${credentialId}`, 180, 1475);
+      ctx.fillText(`STATUS: VERIFIED ACADEMIC ACCREDITATION`, 180, 1505);
 
       // Right: Issue Date
       ctx.textAlign = 'right';
-      ctx.fillText(`DATE OF ISSUANCE: ${issueDate}`, width - 180, 1480);
-      ctx.fillText(`ISSUED BY: K AKASH — Founder, Sunny Organization`, width - 180, 1515);
+      ctx.fillText(`DATE OF ISSUANCE: ${issueDate}`, width - 180, 1475);
+      ctx.fillText(`ISSUED BY: K AKASH — Founder, Sunny Organization`, width - 180, 1505);
+
+      // Embedded Verification QR Code on Export Canvas (Right side, next to seal)
+      try {
+        const qrVerificationUrl = getCertificateVerificationUrl(credentialId);
+        const qrSize = 120;
+        const qrX = width - 560;
+        const qrY = bottomY - 15;
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(qrX - 8, qrY - 8, qrSize + 16, qrSize + 16);
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(qrX - 8, qrY - 8, qrSize + 16, qrSize + 16);
+
+        await drawQrCodeOnCanvas(ctx, qrVerificationUrl, qrX, qrY, qrSize);
+
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 12px "JetBrains Mono", monospace';
+        ctx.fillStyle = '#111111';
+        ctx.fillText('SCAN TO VERIFY', qrX + qrSize / 2, qrY + qrSize + 22);
+      } catch (qrErr) {
+        console.warn('Canvas QR embedding skipped:', qrErr);
+      }
 
       // Trigger Download
       const dataUrl = canvas.toDataURL('image/png');
@@ -576,6 +707,20 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
               {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-stone-500" />}
               <span className="hidden sm:inline">{copiedLink ? 'COPIED!' : 'SHARE'}</span>
             </button>
+
+            <button
+              onClick={() => setIsQrModalOpen(true)}
+              disabled={!isEligible || !isClaimed}
+              className={`px-3.5 py-2.5 font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] flex items-center gap-1.5 transition-all cursor-pointer ${
+                isEligible && isClaimed 
+                  ? 'bg-white hover:bg-stone-50 text-[#111111]' 
+                  : 'bg-stone-200 text-stone-400 border-stone-300 cursor-not-allowed shadow-none'
+              }`}
+              title={isEligible && isClaimed ? "View and share verification QR code" : "Locked: Complete all 3 assessments to unlock"}
+            >
+              <QrCode className="w-4 h-4 text-[#1A42D9]" />
+              <span>QR CODE</span>
+            </button>
           </div>
         </div>
 
@@ -640,6 +785,18 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
           >
             {isEligible ? <Unlock className="w-3.5 h-3.5 text-emerald-600" /> : <Lock className="w-3.5 h-3.5 text-amber-600" />}
             <span>CERTIFICATE {isEligible ? (isClaimed ? '✓ READY' : '★ CLAIM') : '🔒 LOCKED'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('verify')}
+            className={`px-4 py-2 font-mono text-xs font-bold border-[2px] border-[#111111] transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'verify'
+                ? 'bg-[#111111] text-white shadow-[2px_2px_0px_0px_#111111]'
+                : 'bg-white text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-[#1A42D9]" />
+            <span>VERIFY CREDENTIAL</span>
           </button>
         </div>
       </div>
@@ -1490,150 +1647,714 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
           )}
 
           {/* THE OFFICIAL CERTIFICATE NODE */}
-          <div className="flex justify-center relative">
-            
-            {/* Watermark/Lock Overlay if NOT eligible */}
-            {!isEligible && (
-              <div className="absolute inset-0 bg-stone-900/40 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center p-6 text-center no-print">
-                <div className="bg-white border-[4px] border-[#111111] shadow-[10px_10px_0px_0px_#111111] p-8 max-w-md space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-900 mx-auto flex items-center justify-center border-[2px] border-[#111111]">
-                    <Lock className="w-8 h-8" />
-                  </div>
-                  <h4 className="text-xl font-black text-[#111111]">
-                    CERTIFICATE LOCKED
-                  </h4>
-                  <p className="text-xs font-mono text-stone-600 leading-relaxed">
-                    Complete all 20 Quiz Challenges, 20 Coding Challenges, and 20 Debugging Challenges to unlock and claim this official credential.
-                  </p>
-                  <button
-                    onClick={() => setActiveTab('dashboard')}
-                    className="w-full py-2.5 bg-[#111111] hover:bg-[#1A42D9] text-white font-mono text-xs font-bold border-[2px] border-[#111111] transition-colors cursor-pointer"
-                  >
-                    RETURN TO PROGRESS DASHBOARD
-                  </button>
-                </div>
+          <div className="space-y-4">
+
+            {/* Recipient Customization Toolbar (no-print) */}
+            <div className="bg-white border-[3px] border-[#111111] p-4 shadow-[4px_4px_0px_0px_#111111] flex flex-col md:flex-row items-center justify-between gap-4 no-print">
+              <div className="w-full md:w-auto flex-1 flex flex-col sm:flex-row sm:items-center gap-3">
+                <span className="font-mono text-xs font-bold uppercase tracking-wider text-stone-700 whitespace-nowrap">
+                  CERTIFICATE RECIPIENT NAME:
+                </span>
+                <input
+                  type="text"
+                  value={recipientName}
+                  onChange={(e) => {
+                    const newName = e.target.value;
+                    setRecipientName(newName);
+                    if (isEligible && isClaimed) {
+                      const updated = updateCertificateRecipientName(newName);
+                      if (onProgressUpdate) onProgressUpdate(updated);
+                    }
+                  }}
+                  placeholder="Enter official recipient name"
+                  className="w-full sm:max-w-xs px-3 py-1.5 font-mono text-xs font-bold border-[2px] border-[#111111] bg-stone-50 focus:bg-white focus:outline-hidden focus:border-[#1A42D9]"
+                />
               </div>
-            )}
 
-            <div
-              ref={certRef}
-              id="printable_certificate_node"
-              className="w-full bg-[#FCFAF5] border-[4px] border-[#111111] shadow-[10px_10px_0px_0px_#111111] p-8 sm:p-14 lg:p-16 relative select-text overflow-hidden"
-            >
-              {/* Decorative Framing */}
-              <div className="border-[2px] border-[#1A42D9] p-6 sm:p-10 relative">
-                
-                {/* Corner Decorative Crosshairs */}
-                <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#111111]" />
-                <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-[#111111]" />
-                <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-[#111111]" />
-                <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-[#111111]" />
+              <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+                <button
+                  onClick={() => {
+                    setVerificationInput(credentialId);
+                    handleRunVerification(credentialId);
+                    setActiveTab('verify');
+                  }}
+                  className="px-3.5 py-1.5 font-mono text-xs font-bold border-[2px] border-[#111111] bg-white hover:bg-stone-100 text-[#111111] flex items-center gap-1.5 shadow-[2px_2px_0px_0px_#111111] cursor-pointer"
+                  title="Test and verify this certificate on the registry"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#1A42D9]" />
+                  <span>VERIFY ON REGISTRY</span>
+                </button>
 
-                {/* Organization Brand: SUNNY ORGANIZATION */}
-                <div className="text-center space-y-1 mb-8">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#1A42D9]/10 border border-[#1A42D9] text-[#1A42D9] font-mono text-[11px] font-bold tracking-widest uppercase">
-                    <span>SUNNY ORGANIZATION</span>
+                <button
+                  onClick={handlePrint}
+                  disabled={!isEligible || !isClaimed}
+                  className={`px-3.5 py-1.5 font-mono text-xs font-bold border-[2px] border-[#111111] flex items-center gap-1.5 cursor-pointer ${
+                    isEligible && isClaimed
+                      ? 'bg-white hover:bg-stone-100 text-[#111111] shadow-[2px_2px_0px_0px_#111111]'
+                      : 'bg-stone-200 text-stone-400 border-stone-300 cursor-not-allowed'
+                  }`}
+                >
+                  <Printer className="w-3.5 h-3.5 text-[#1A42D9]" />
+                  <span>PRINT / PDF</span>
+                </button>
+
+                <button
+                  onClick={handleDownloadPng}
+                  disabled={!isEligible || !isClaimed || isExportingPng}
+                  className={`px-4 py-1.5 font-mono text-xs font-bold border-[2px] border-[#111111] flex items-center gap-1.5 cursor-pointer ${
+                    isEligible && isClaimed
+                      ? 'bg-[#111111] hover:bg-[#1A42D9] text-white shadow-[2px_2px_0px_0px_#111111]'
+                      : 'bg-stone-200 text-stone-400 border-stone-300 cursor-not-allowed'
+                  }`}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>{isExportingPng ? 'RENDERING...' : 'DOWNLOAD PNG'}</span>
+                </button>
+
+                <button
+                  onClick={() => setIsQrModalOpen(true)}
+                  disabled={!isEligible || !isClaimed}
+                  className={`px-3.5 py-1.5 font-mono text-xs font-bold border-[2px] border-[#111111] flex items-center gap-1.5 cursor-pointer ${
+                    isEligible && isClaimed
+                      ? 'bg-white hover:bg-stone-100 text-[#111111] shadow-[2px_2px_0px_0px_#111111]'
+                      : 'bg-stone-200 text-stone-400 border-stone-300 cursor-not-allowed'
+                  }`}
+                  title="View & Share Verification QR Code"
+                >
+                  <QrCode className="w-3.5 h-3.5 text-[#1A42D9]" />
+                  <span>QR CODE</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-center relative">
+              {/* Watermark/Lock Overlay if NOT eligible */}
+              {!isEligible && (
+                <div className="absolute inset-0 bg-stone-900/40 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center p-6 text-center no-print">
+                  <div className="bg-white border-[4px] border-[#111111] shadow-[10px_10px_0px_0px_#111111] p-8 max-w-md space-y-4">
+                    <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-900 mx-auto flex items-center justify-center border-[2px] border-[#111111]">
+                      <Lock className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-xl font-black text-[#111111]">
+                      CERTIFICATE LOCKED
+                    </h4>
+                    <p className="text-xs font-mono text-stone-600 leading-relaxed">
+                      Complete all 20 Quiz Challenges, 20 Coding Challenges, and 20 Debugging Challenges to unlock and claim this official credential.
+                    </p>
+                    <button
+                      onClick={() => setActiveTab('dashboard')}
+                      className="w-full py-2.5 bg-[#111111] hover:bg-[#1A42D9] text-white font-mono text-xs font-bold border-[2px] border-[#111111] transition-colors cursor-pointer"
+                    >
+                      RETURN TO PROGRESS DASHBOARD
+                    </button>
                   </div>
-                  <p className="text-stone-500 font-mono text-[10px] tracking-wider uppercase">
-                    ACADEMIC & FIRST-PRINCIPLES ARTIFICIAL INTELLIGENCE DIVISION
-                  </p>
                 </div>
+              )}
 
-                {/* Title */}
-                <div className="text-center space-y-2 mb-8">
-                  <h2 className="text-3xl sm:text-5xl font-black font-serif tracking-tight text-[#111111]">
-                    Certificate of Completion
-                  </h2>
-                  <p className="text-xs sm:text-sm font-serif italic text-stone-600">
-                    This certificate is proudly presented to
-                  </p>
-                </div>
-
-                {/* Recipient Name */}
-                <div className="text-center my-6">
-                  <div className="text-3xl sm:text-5xl lg:text-6xl font-black font-serif text-[#111111] tracking-wide uppercase underline decoration-[#1A42D9] decoration-2 underline-offset-8">
-                    {recipientName || 'LEARNER NAME'}
-                  </div>
-                </div>
-
-                {/* Citation Statement */}
-                <div className="text-center max-w-3xl mx-auto space-y-3 my-8">
-                  <p className="text-xs sm:text-sm text-stone-700 leading-relaxed font-sans">
-                    for successfully completing the
-                  </p>
-                  <div className="text-lg sm:text-2xl font-bold font-mono text-[#1A42D9]">
-                    {courseName}
-                  </div>
-                  <p className="text-xs sm:text-sm text-stone-700 font-sans font-medium pt-1">
-                    and successfully completing all required assessments:
-                  </p>
-                </div>
-
-                {/* Three Required Assessments */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto my-8 text-center">
-                  <div className="p-3 bg-white border border-[#111111] text-xs font-mono font-bold text-stone-900 flex items-center justify-center gap-2 shadow-xs">
-                    <Check className="w-4 h-4 text-[#1A42D9] shrink-0" />
-                    <span>20 Quiz Challenges</span>
-                  </div>
-                  <div className="p-3 bg-white border border-[#111111] text-xs font-mono font-bold text-stone-900 flex items-center justify-center gap-2 shadow-xs">
-                    <Check className="w-4 h-4 text-[#1A42D9] shrink-0" />
-                    <span>20 Coding Challenges</span>
-                  </div>
-                  <div className="p-3 bg-white border border-[#111111] text-xs font-mono font-bold text-stone-900 flex items-center justify-center gap-2 shadow-xs">
-                    <Check className="w-4 h-4 text-[#1A42D9] shrink-0" />
-                    <span>20 Debugging Challenges</span>
-                  </div>
-                </div>
-
-                {/* Signatures Section: K AKASH — Founder, Sunny Organization */}
-                <div className="pt-8 border-t-[2px] border-[#111111] mt-10 flex flex-col items-center justify-center text-center">
+              {/* The Certificate Paper Document */}
+              <div
+                ref={certRef}
+                id="printable_certificate_node"
+                className="w-full bg-[#FAF8F2] border-[4px] border-[#111111] shadow-[12px_12px_0px_0px_#111111] p-6 sm:p-12 lg:p-16 relative select-text overflow-hidden"
+              >
+                {/* Decorative Framing */}
+                <div className="border-[2px] border-[#1A42D9] p-6 sm:p-10 relative bg-white/60">
                   
-                  <div className="text-[10px] font-mono uppercase tracking-widest text-stone-500 font-bold mb-3">
-                    ISSUED BY
+                  {/* Corner Decorative Crosshairs */}
+                  <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#111111]" />
+                  <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-[#111111]" />
+                  <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-[#111111]" />
+                  <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-[#111111]" />
+
+                  {/* Micro Top Security Header */}
+                  <div className="flex items-center justify-between border-b border-[#E5E2D9] pb-3 mb-6 font-mono text-[9px] sm:text-[10px] text-stone-500 tracking-widest uppercase">
+                    <span>ACCREDITATION ID: {credentialId}</span>
+                    <span className="hidden sm:inline">SUNNY ORGANIZATION // DEPT. OF FIRST-PRINCIPLES INTELLIGENCE</span>
+                    <span>STATUS: {isEligible && isClaimed ? 'VERIFIED' : 'PENDING'}</span>
                   </div>
 
-                  <div className="h-12 flex items-end justify-center">
-                    <span className="font-serif italic text-3xl sm:text-4xl text-stone-900 font-black tracking-wide">
-                      K Akash
-                    </span>
+                  {/* Organization Brand: SUNNY ORGANIZATION */}
+                  <div className="text-center space-y-1 mb-6">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#1A42D9]/10 border border-[#1A42D9] text-[#1A42D9] font-mono text-xs font-bold tracking-widest uppercase">
+                      <span>SUNNY ORGANIZATION</span>
+                    </div>
+                    <p className="text-stone-500 font-mono text-[10px] tracking-wider uppercase">
+                      ACADEMIC & FIRST-PRINCIPLES ARTIFICIAL INTELLIGENCE DIVISION
+                    </p>
                   </div>
 
-                  <div className="w-64 border-t-2 border-[#111111] pt-2 mt-1 text-center">
-                    <div className="text-sm font-mono font-black text-[#111111] tracking-wider">
-                      K AKASH
-                    </div>
-                    <div className="text-xs font-mono font-bold text-[#1A42D9]">
-                      Founder
-                    </div>
-                    <div className="text-xs font-mono text-stone-600 font-medium">
-                      Sunny Organization
+                  {/* Title */}
+                  <div className="text-center space-y-2 mb-8">
+                    <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black font-serif tracking-tight text-[#111111]">
+                      Certificate of Accreditation
+                    </h2>
+                    <p className="text-xs sm:text-sm font-serif italic text-stone-600">
+                      This official academic record certifies that
+                    </p>
+                  </div>
+
+                  {/* Recipient Name */}
+                  <div className="text-center my-6">
+                    <div className="text-3xl sm:text-5xl lg:text-6xl font-black font-serif text-[#111111] tracking-wide uppercase underline decoration-[#1A42D9] decoration-2 underline-offset-8">
+                      {recipientName || 'LEARNER NAME'}
                     </div>
                   </div>
 
-                  {/* Clarification Label as Requested */}
-                  <div className="mt-4 px-3 py-1 bg-stone-100 border border-stone-300 font-mono text-[11px] text-stone-700 font-bold">
-                    “K AKASH — Founder, Sunny Organization”
+                  {/* Citation Statement */}
+                  <div className="text-center max-w-3xl mx-auto space-y-2 my-6">
+                    <p className="text-xs sm:text-sm text-stone-700 font-sans">
+                      has successfully satisfied all academic and practical requirements for the program:
+                    </p>
+                    <div className="text-lg sm:text-2xl font-bold font-mono text-[#1A42D9]">
+                      {courseName}
+                    </div>
+                    <p className="text-xs sm:text-sm text-stone-600 font-sans font-medium pt-1">
+                      having demonstrated complete mastery across all three rigorous evaluation gates:
+                    </p>
                   </div>
+
+                  {/* Three Required Assessments Badges */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto my-6 text-center">
+                    <div className="p-3 bg-white border border-[#111111] text-xs font-mono font-bold text-stone-900 flex items-center justify-center gap-2 shadow-xs">
+                      <Check className="w-4 h-4 text-[#1A42D9] shrink-0" />
+                      <span>20 Quiz Challenges</span>
+                    </div>
+                    <div className="p-3 bg-white border border-[#111111] text-xs font-mono font-bold text-stone-900 flex items-center justify-center gap-2 shadow-xs">
+                      <Check className="w-4 h-4 text-[#1A42D9] shrink-0" />
+                      <span>20 Coding Challenges</span>
+                    </div>
+                    <div className="p-3 bg-white border border-[#111111] text-xs font-mono font-bold text-stone-900 flex items-center justify-center gap-2 shadow-xs">
+                      <Check className="w-4 h-4 text-[#1A42D9] shrink-0" />
+                      <span>20 Debugging Challenges</span>
+                    </div>
+                  </div>
+
+                  {/* Signatures, Seal & QR Code Section: K AKASH — Founder, Sunny Organization */}
+                  <div className="pt-8 border-t-[2px] border-[#111111] mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-center gap-6">
+                    
+                    {/* 1. Left: Security Barcode Pattern & Hash */}
+                    <div className="flex flex-col items-center sm:items-start space-y-2 text-stone-600 font-mono text-[10px]">
+                      <div className="flex items-center gap-0.5 h-8">
+                        {[4, 2, 6, 2, 3, 5, 2, 4, 3, 6, 2, 4, 5, 3, 2, 6, 4, 2, 3, 5, 4, 2].map((w, idx) => (
+                          <div
+                            key={idx}
+                            className="bg-[#111111] h-full"
+                            style={{ width: `${w}px`, marginRight: '1px' }}
+                          />
+                        ))}
+                      </div>
+                      <div className="font-bold text-[#111111]">
+                        HASH: 0x{credentialId.replace(/[^0-9]/g, '') || '948201'}7F8B
+                      </div>
+                      <div className="text-[9px] text-stone-500">
+                        CRYPTOGRAPHIC REGISTRY ANCHOR
+                      </div>
+                    </div>
+
+                    {/* 2. Center-Left: Authoritative Signature Block */}
+                    <div className="flex flex-col items-center justify-center text-center">
+                      <div className="text-[10px] font-mono uppercase tracking-widest text-stone-500 font-bold mb-2">
+                        ISSUED & SIGNED BY
+                      </div>
+
+                      <div className="h-12 flex items-end justify-center">
+                        <span className="font-serif italic text-3xl sm:text-4xl text-stone-900 font-black tracking-wide">
+                          K Akash
+                        </span>
+                      </div>
+
+                      <div className="w-48 sm:w-52 border-t-2 border-[#111111] pt-2 mt-1 text-center">
+                        <div className="text-sm font-mono font-black text-[#111111] tracking-wider">
+                          K AKASH
+                        </div>
+                        <div className="text-xs font-mono font-bold text-[#1A42D9]">
+                          Founder
+                        </div>
+                        <div className="text-xs font-mono text-stone-600 font-medium">
+                          Sunny Organization
+                        </div>
+                      </div>
+
+                      <div className="mt-2 px-2.5 py-0.5 bg-stone-100 border border-stone-300 font-mono text-[10px] text-stone-900 font-bold">
+                        “K AKASH — Founder”
+                      </div>
+                    </div>
+
+                    {/* 3. Center-Right: Institutional Seal */}
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-22 h-22 rounded-full border-[3px] border-[#111111] p-1 flex items-center justify-center bg-white shadow-xs">
+                        <div className="w-full h-full rounded-full border-2 border-[#1A42D9] border-dashed flex flex-col items-center justify-center text-center p-1">
+                          <span className="font-mono text-[8px] font-black text-stone-800 tracking-tighter">SUNNY ORG</span>
+                          <span className="text-amber-500 text-[10px]">★</span>
+                          <span className="font-mono text-[7px] font-bold text-[#1A42D9] uppercase tracking-tight">VERIFIED</span>
+                          <span className="font-mono text-[7px] text-stone-500 font-medium">ACCREDITATION</span>
+                        </div>
+                      </div>
+                      <span className="font-mono text-[9px] text-stone-500 font-bold mt-1">OFFICIAL SEAL</span>
+                    </div>
+
+                    {/* 4. Right: Official Verification QR Code */}
+                    <div className="flex flex-col items-center sm:items-end justify-center">
+                      <button
+                        type="button"
+                        onClick={() => setIsQrModalOpen(true)}
+                        className="group relative p-1.5 bg-white border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] hover:shadow-[1px_1px_0px_0px_#111111] hover:translate-x-0.5 hover:translate-y-0.5 transition-all cursor-pointer text-center"
+                        title="Click to view & share high-resolution QR verification code"
+                      >
+                        {qrCodeDataUrl ? (
+                          <img 
+                            src={qrCodeDataUrl} 
+                            alt={`Verification QR for ${credentialId}`}
+                            className="w-18 h-18 sm:w-20 sm:h-20 object-contain"
+                          />
+                        ) : (
+                          <div className="w-18 h-18 sm:w-20 sm:h-20 bg-stone-100 flex items-center justify-center font-mono text-[8px] text-stone-400">
+                            GENERATING...
+                          </div>
+                        )}
+                        <div className="mt-1 flex items-center justify-center gap-1 text-[8px] font-mono font-bold text-[#1A42D9] group-hover:underline">
+                          <QrCode className="w-2.5 h-2.5" />
+                          <span>SCAN TO VERIFY</span>
+                        </div>
+                      </button>
+                      <span className="font-mono text-[8px] text-stone-500 font-bold mt-1 tracking-wider uppercase">
+                        VERIFICATION QR
+                      </span>
+                    </div>
+
+                  </div>
+
+                  {/* Bottom Verification Footer */}
+                  <div className="mt-8 pt-4 border-t border-stone-300 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-mono text-stone-600">
+                    <div>
+                      CREDENTIAL ID: <span className="font-bold text-[#111111]">{credentialId}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setVerificationInput(credentialId);
+                        handleRunVerification(credentialId);
+                        setActiveTab('verify');
+                      }}
+                      className="flex items-center gap-1 text-[#1A42D9] hover:underline font-bold cursor-pointer"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>VERIFIED ACADEMIC ACCREDITATION [LOOKUP →]</span>
+                    </button>
+                    <div>
+                      DATE OF ISSUANCE: <span className="font-bold text-[#111111]">{issueDate}</span>
+                    </div>
+                  </div>
+
                 </div>
-
-                {/* Bottom Verification Footer */}
-                <div className="mt-8 pt-4 border-t border-stone-300 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-mono text-stone-600">
-                  <div>
-                    CERTIFICATE ID: <span className="font-bold text-[#111111]">{credentialId}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>VERIFIED ACADEMIC ACCREDITATION</span>
-                  </div>
-                  <div>
-                    COMPLETION DATE: <span className="font-bold text-[#111111]">{issueDate}</span>
-                  </div>
-                </div>
-
               </div>
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 6: CREDENTIAL VERIFICATION REGISTRY                              */}
+      {/* ==================================================================== */}
+      {activeTab === 'verify' && (
+        <div className="max-w-4xl mx-auto space-y-6">
+          
+          {/* Header Banner */}
+          <div className="bg-white border-[3px] border-[#111111] p-6 sm:p-8 shadow-[6px_6px_0px_0px_#111111]">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-2.5 py-1 bg-[#1A42D9] text-white font-mono text-[10px] font-bold tracking-widest uppercase">
+                SUNNY ORGANIZATION
+              </span>
+              <span className="px-2.5 py-1 bg-stone-100 border border-stone-300 font-mono text-[10px] font-bold tracking-widest text-stone-700 uppercase">
+                PUBLIC INTEGRITY REGISTRY
+              </span>
+            </div>
+
+            <h2 className="text-2xl sm:text-3xl font-black font-serif text-[#111111] tracking-tight">
+              Credential Verification Registry
+            </h2>
+            <p className="text-xs sm:text-sm font-mono text-stone-600 mt-2 leading-relaxed max-w-2xl">
+              Cryptographically and procedurally verify Sunny Organization machine learning certificates. Enter an official Credential ID to validate recipient completion status, earned date, and rigorous 20/20/20 assessment records.
+            </p>
+          </div>
+
+          {/* Search Input Box */}
+          <div className="bg-white border-[3px] border-[#111111] p-6 shadow-[6px_6px_0px_0px_#111111] space-y-4">
+            <label className="block font-mono text-xs font-bold text-stone-800 uppercase tracking-wider">
+              ENTER CERTIFICATE ID TO VERIFY:
+            </label>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={verificationInput}
+                  onChange={(e) => setVerificationInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleRunVerification();
+                  }}
+                  placeholder="e.g. FFA-ML-2026-849201"
+                  className="w-full pl-10 pr-4 py-3 font-mono text-sm font-bold border-[2px] border-[#111111] bg-stone-50 focus:bg-white focus:outline-hidden focus:border-[#1A42D9] tracking-wider uppercase"
+                />
+              </div>
+
+              <button
+                onClick={() => handleRunVerification()}
+                className="px-6 py-3 bg-[#111111] hover:bg-[#1A42D9] text-white font-mono text-xs font-bold uppercase tracking-wider border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] cursor-pointer transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <Search className="w-4 h-4" />
+                <span>VERIFY CREDENTIAL</span>
+              </button>
+            </div>
+
+            {/* Quick Test Links */}
+            <div className="flex items-center gap-2 flex-wrap pt-1 text-xs font-mono text-stone-600">
+              <span className="font-bold text-stone-700">Quick Test:</span>
+              <button
+                onClick={() => {
+                  setVerificationInput(credentialId);
+                  handleRunVerification(credentialId);
+                }}
+                className="underline hover:text-[#1A42D9] cursor-pointer font-bold"
+              >
+                Test with My Certificate ID ({credentialId})
+              </button>
             </div>
           </div>
 
+          {/* Verification Results Display */}
+          {hasSearchedVerification && verificationResult && (
+            <div className="space-y-4">
+              {verificationResult.isValid ? (
+                /* SUCCESSFUL VERIFICATION REPORT */
+                <div className="bg-white border-[4px] border-emerald-800 shadow-[8px_8px_0px_0px_#065F46] overflow-hidden">
+                  
+                  {/* Status Banner */}
+                  <div className="bg-emerald-700 text-white px-6 py-3.5 font-mono text-xs sm:text-sm font-black tracking-wider uppercase flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-emerald-200 shrink-0" />
+                      <span>[✓] 100% VERIFIED AUTHENTIC ACCREDITATION</span>
+                    </div>
+                    <span className="text-[10px] bg-emerald-800 px-2.5 py-1 border border-emerald-600">
+                      REGISTRY RECORD #VALID
+                    </span>
+                  </div>
+
+                  <div className="p-6 sm:p-8 space-y-6">
+                    
+                    {/* Key Details Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-6 border-b border-stone-200">
+                      <div className="space-y-1">
+                        <span className="font-mono text-[10px] uppercase font-bold text-stone-500">
+                          ACCREDITED RECIPIENT
+                        </span>
+                        <div className="text-xl font-serif font-black text-[#111111] uppercase tracking-wide">
+                          {verificationResult.recipientName}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="font-mono text-[10px] uppercase font-bold text-stone-500">
+                          ACCREDITED CURRICULUM
+                        </span>
+                        <div className="text-base font-mono font-bold text-[#1A42D9]">
+                          {verificationResult.courseName}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="font-mono text-[10px] uppercase font-bold text-stone-500">
+                          ISSUING AUTHORITY & SIGNATORY
+                        </span>
+                        <div className="text-sm font-mono font-black text-[#111111]">
+                          {verificationResult.issuer}
+                        </div>
+                        <div className="text-xs font-mono text-stone-600">
+                          Sunny Organization
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="font-mono text-[10px] uppercase font-bold text-stone-500">
+                          CREDENTIAL IDENTIFIER
+                        </span>
+                        <div className="text-sm font-mono font-bold text-[#111111]">
+                          {verificationResult.certificateId}
+                        </div>
+                        <div className="text-[11px] font-mono text-stone-500">
+                          Issued: {new Date(verificationResult.issuedAt).toLocaleDateString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Verified Assessment Milestone Proof */}
+                    <div className="space-y-3">
+                      <span className="font-mono text-xs font-black uppercase text-stone-800 tracking-wider">
+                        VERIFIED 3-STAGE RIGOROUS ASSESSMENT AUDIT:
+                      </span>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="p-3 bg-emerald-50 border-[2px] border-emerald-800 font-mono text-xs space-y-1">
+                          <div className="font-bold text-emerald-950 flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>STAGE 1: THEORY</span>
+                          </div>
+                          <div className="text-[11px] text-emerald-800 font-medium">
+                            20 / 20 Quiz Challenges Passed
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-emerald-50 border-[2px] border-emerald-800 font-mono text-xs space-y-1">
+                          <div className="font-bold text-emerald-950 flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>STAGE 2: ALGORITHMS</span>
+                          </div>
+                          <div className="text-[11px] text-emerald-800 font-medium">
+                            20 / 20 Coding Challenges Verified
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-emerald-50 border-[2px] border-emerald-800 font-mono text-xs space-y-1">
+                          <div className="font-bold text-emerald-950 flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>STAGE 3: DEBUGGING</span>
+                          </div>
+                          <div className="text-[11px] text-emerald-800 font-medium">
+                            20 / 20 Edge Cases Resolved
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Official Signatory Citation */}
+                    <div className="p-4 bg-stone-50 border border-stone-300 font-mono text-xs space-y-1">
+                      <div className="text-stone-500 text-[10px] uppercase font-bold">
+                        AUTHENTICATION ATTESTATION:
+                      </div>
+                      <div className="text-stone-900 font-bold">
+                        “K AKASH — Founder, Sunny Organization”
+                      </div>
+                      <div className="text-stone-500 text-[10px]">
+                        Cryptographic Hash: 0x{verificationResult.certificateId.replace(/[^0-9]/g, '')}7F8B92AC01
+                      </div>
+                    </div>
+
+                    {/* Quick View Button */}
+                    <div className="flex gap-3 flex-wrap">
+                      <button
+                        onClick={() => setActiveTab('certificate')}
+                        className="px-6 py-2.5 bg-[#111111] hover:bg-[#1A42D9] text-white font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] cursor-pointer flex items-center gap-2"
+                      >
+                        <FileCheck className="w-4 h-4" />
+                        <span>VIEW OFFICIAL CERTIFICATE DOCUMENT</span>
+                      </button>
+
+                      <button
+                        onClick={handlePrint}
+                        className="px-4 py-2.5 bg-white hover:bg-stone-50 text-[#111111] font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Printer className="w-4 h-4 text-[#1A42D9]" />
+                        <span>PRINT RECORD</span>
+                      </button>
+
+                      <button
+                        onClick={() => setIsQrModalOpen(true)}
+                        className="px-4 py-2.5 bg-white hover:bg-stone-50 text-[#111111] font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] cursor-pointer flex items-center gap-1.5"
+                      >
+                        <QrCode className="w-4 h-4 text-[#1A42D9]" />
+                        <span>SHARE QR CODE</span>
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+              ) : (
+                /* FAILED / UNVERIFIED REPORT */
+                <div className="bg-white border-[4px] border-rose-900 shadow-[8px_8px_0px_0px_#881337] overflow-hidden">
+                  <div className="bg-rose-800 text-white px-6 py-3.5 font-mono text-xs sm:text-sm font-black tracking-wider uppercase flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-rose-200 shrink-0" />
+                    <span>[!] CREDENTIAL UNVERIFIED / NOT FOUND</span>
+                  </div>
+
+                  <div className="p-6 sm:p-8 space-y-4">
+                    <h3 className="text-lg font-black text-rose-950 font-serif">
+                      Verification Search Returned No Valid Record
+                    </h3>
+
+                    <p className="text-xs font-mono text-stone-700 leading-relaxed">
+                      The Certificate ID <span className="font-bold text-[#111111] bg-stone-100 px-1.5 py-0.5 border border-stone-300">"{verificationInput}"</span> could not be authenticated against the Sunny Organization registry.
+                    </p>
+
+                    <div className="bg-amber-50 border-[2px] border-amber-800 p-4 space-y-2 text-xs font-mono text-amber-950">
+                      <div className="font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4 text-amber-700" />
+                        <span>STRICT SUNNY ORGANIZATION INTEGRITY STANDARDS:</span>
+                      </div>
+                      <p className="leading-relaxed">
+                        Sunny Organization certificates cannot be issued, previewed, or claimed simply by viewing course material. Every credential requires verified 100% completion of all three stages:
+                      </p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li>Stage 1: 20 Quiz Challenges (Theory)</li>
+                        <li>Stage 2: 20 Coding Challenges (NumPy / Python)</li>
+                        <li>Stage 3: 20 Debugging Challenges (Numerical Gradients & Shapes)</li>
+                      </ul>
+                    </div>
+
+                    <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                      <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className="px-6 py-2.5 bg-[#111111] hover:bg-[#1A42D9] text-white font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] cursor-pointer flex items-center gap-2"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                        <span>RETURN TO ASSESSMENTS DASHBOARD</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setVerificationInput(credentialId);
+                          handleRunVerification(credentialId);
+                        }}
+                        className="px-4 py-2.5 bg-white hover:bg-stone-50 text-stone-800 font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] cursor-pointer"
+                      >
+                        TEST CURRENT USER ID ({credentialId})
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Educational Standard Card if not searched yet */}
+          {!hasSearchedVerification && (
+            <div className="bg-stone-100 border-[2px] border-stone-300 p-6 font-mono text-xs space-y-2 text-stone-700">
+              <div className="font-bold text-[#111111] uppercase tracking-wider flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-[#1A42D9]" />
+                <span>ABOUT SUNNY ORGANIZATION VERIFICATION</span>
+              </div>
+              <p className="leading-relaxed">
+                Every certificate issued by Sunny Organization contains an immutable Credential ID (formatted as <span className="font-bold text-[#111111]">FFA-ML-2026-XXXXXX</span>). Our registry verifies completion timestamps, candidate names, and guarantees that all 60 rigorous assessments (20 Quiz, 20 Coding, and 20 Debugging) were passed before accreditation.
+              </p>
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* QR CODE SHARE & SCAN MODAL                                           */}
+      {/* ==================================================================== */}
+      {isQrModalOpen && (
+        <div 
+          id="qr_code_modal_backdrop"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs no-print"
+          onClick={() => setIsQrModalOpen(false)}
+        >
+          <div 
+            id="qr_code_modal_content"
+            className="w-full max-w-md bg-white border-[4px] border-[#111111] shadow-[8px_8px_0px_0px_#111111] p-6 space-y-5 relative select-none"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b-[2px] border-[#111111] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-[#1A42D9] text-white">
+                  <QrCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-mono text-sm font-black uppercase text-[#111111] tracking-tight">
+                    CREDENTIAL QR CODE
+                  </h3>
+                  <p className="font-mono text-[10px] text-stone-500">
+                    SCAN TO VERIFY ACCREDITATION
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsQrModalOpen(false)}
+                className="p-1.5 hover:bg-stone-100 border border-transparent hover:border-[#111111] text-stone-500 hover:text-[#111111] transition-colors cursor-pointer"
+                title="Close Modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* QR Code Presentation Box */}
+            <div className="flex flex-col items-center justify-center p-6 bg-[#FAF8F2] border-[2px] border-[#111111] relative">
+              <div className="p-3 bg-white border-[2px] border-[#111111] shadow-[4px_4px_0px_0px_#111111]">
+                {qrCodeDataUrl ? (
+                  <img
+                    src={qrCodeDataUrl}
+                    alt={`Verification QR Code for ${credentialId}`}
+                    className="w-48 h-48 sm:w-56 sm:h-56 object-contain"
+                  />
+                ) : (
+                  <div className="w-48 h-48 sm:w-56 sm:h-56 bg-stone-100 flex items-center justify-center font-mono text-xs text-stone-400">
+                    Generating QR Code...
+                  </div>
+                )}
+              </div>
+
+              {/* Status pill under QR */}
+              <div className="mt-4 flex items-center gap-1.5 px-3 py-1 bg-emerald-100 border border-emerald-800 text-emerald-900 font-mono text-[10px] font-bold">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                <span>ACTIVE VERIFICATION ENCODING</span>
+              </div>
+            </div>
+
+            {/* Credential Details */}
+            <div className="space-y-2 font-mono text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-stone-200">
+                <span className="text-stone-500">RECIPIENT:</span>
+                <span className="font-bold text-[#111111]">{recipientName}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-stone-200">
+                <span className="text-stone-500">CREDENTIAL ID:</span>
+                <span className="font-bold text-[#1A42D9]">{credentialId}</span>
+              </div>
+              <div className="space-y-1 pt-1">
+                <span className="text-stone-500 text-[10px] uppercase font-bold">
+                  VERIFICATION URL:
+                </span>
+                <div className="p-2 bg-stone-100 border border-stone-300 text-[10px] break-all font-mono text-stone-700 select-all">
+                  {getCertificateVerificationUrl(credentialId)}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+              <button
+                onClick={handleCopyQrUrl}
+                className="w-full py-2.5 px-3 bg-white hover:bg-stone-50 text-[#111111] font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+              >
+                {copiedQrUrl ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-stone-500" />}
+                <span>{copiedQrUrl ? 'URL COPIED!' : 'COPY URL'}</span>
+              </button>
+
+              <button
+                onClick={handleDownloadQrImage}
+                disabled={!qrCodeDataUrl}
+                className="w-full py-2.5 px-3 bg-[#111111] hover:bg-[#1A42D9] text-white font-mono text-xs font-bold border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+              >
+                <Download className="w-4 h-4" />
+                <span>DOWNLOAD QR</span>
+              </button>
+            </div>
+
+            {/* Scan Guidance note */}
+            <p className="font-mono text-[10px] text-stone-500 text-center leading-normal">
+              Point any smartphone camera or scanning app at this QR code to view live verified completion metrics.
+            </p>
+          </div>
         </div>
       )}
 

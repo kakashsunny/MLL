@@ -14,7 +14,14 @@ import {
   LogIn,
   UserPlus,
   ShieldCheck,
-  User
+  User,
+  Menu,
+  X,
+  BookOpen,
+  Terminal,
+  Trophy,
+  Layers,
+  Award
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -24,6 +31,7 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterPlatform }) => {
   const { user, profile, role, openAuthModal } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   const handleSelect = (view: ViewMode) => {
     if (typeof onSelectView === 'function') {
@@ -175,10 +183,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
       {/* =====================================================================
           1. CLEAN EDITORIAL NAVIGATION
       ===================================================================== */}
-      <header className="sticky top-0 z-40 bg-[#F7F5EF]/95 backdrop-blur-md border-b border-[#E5E2D9] px-6 lg:px-12 py-4">
+      <header className="sticky top-0 z-40 bg-[#F7F5EF]/95 backdrop-blur-md border-b border-[#E5E2D9] px-4 sm:px-6 lg:px-12 py-3 sm:py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Logo & Manifesto */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 sm:gap-6">
+            {/* Mobile Hamburger Menu Toggle */}
+            <button
+              id="landing_mobile_menu_btn"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg border border-[#E5E2D9] bg-white hover:bg-stone-50 text-stone-700 active:bg-stone-100 transition-colors cursor-pointer shadow-2xs"
+              title={isMobileMenuOpen ? "Close navigation" : "Open navigation"}
+              aria-label="Toggle navigation menu"
+            >
+              {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+
             <button 
               onClick={() => handleSelect('landing')}
               className="text-left group"
@@ -191,35 +210,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               </span>
             </button>
             
-            {/* Primary Editorial Nav Links */}
-            <nav className="hidden md:flex items-center gap-8 pl-6 border-l border-[#E5E2D9] text-xs font-medium text-stone-600">
+            {/* Primary Editorial Nav Links (Desktop & Laptop) */}
+            <nav className="hidden md:flex items-center gap-6 lg:gap-8 pl-6 border-l border-[#E5E2D9] text-xs font-medium text-stone-600">
               <button 
                 onClick={() => handleSelect('course')}
-                className="hover:text-[#111111] transition-colors"
+                className="hover:text-[#111111] transition-colors cursor-pointer"
               >
                 Learn
               </button>
               <button 
                 onClick={() => handleSelect('lab')}
-                className="hover:text-[#111111] transition-colors"
+                className="hover:text-[#111111] transition-colors cursor-pointer"
               >
                 ML Lab
               </button>
               <button 
                 onClick={() => handleSelect('projects')}
-                className="hover:text-[#111111] transition-colors"
+                className="hover:text-[#111111] transition-colors cursor-pointer"
               >
                 Projects
               </button>
               <button 
                 onClick={() => handleSelect('roadmap')}
-                className="hover:text-[#111111] transition-colors"
+                className="hover:text-[#111111] transition-colors cursor-pointer"
               >
                 Roadmap
               </button>
               <button 
                 onClick={() => handleSelect('quiz')}
-                className="hover:text-[#111111] transition-colors"
+                className="hover:text-[#111111] transition-colors cursor-pointer"
               >
                 Challenges
               </button>
@@ -227,10 +246,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
           </div>
 
           {/* Right Action Items */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
             <button
               onClick={() => handleSelect('tutor')}
-              className="hidden md:inline-flex text-xs font-mono text-stone-600 hover:text-[#1A42D9] transition-colors items-center gap-1.5"
+              className="hidden sm:inline-flex text-xs font-mono text-stone-600 hover:text-[#1A42D9] transition-colors items-center gap-1.5 px-2 py-1 rounded hover:bg-stone-100"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#1A42D9]" />
               <span>Forge AI</span>
@@ -242,7 +261,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
                   <ShieldCheck className="w-3 h-3" />
                   <span>{role}</span>
                 </span>
-                <span className="text-xs font-mono font-medium text-stone-700 hidden sm:inline truncate max-w-[120px]">
+                <span className="text-xs font-mono font-medium text-stone-700 hidden lg:inline truncate max-w-[120px]">
                   {profile?.displayName?.split(' ')[0] || user.email?.split('@')[0]}
                 </span>
               </div>
@@ -250,7 +269,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               <button
                 id="landing_auth_btn"
                 onClick={() => openAuthModal('login')}
-                className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg border border-[#E5E2D9] bg-white hover:bg-stone-50 text-xs font-mono text-stone-800 font-semibold transition-colors cursor-pointer shadow-2xs hover:border-[#111111]"
+                className="px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg border border-[#E5E2D9] bg-white hover:bg-stone-50 text-xs font-mono text-stone-800 font-semibold transition-colors cursor-pointer shadow-2xs hover:border-[#111111]"
                 title="Sign In to NeuraForge"
               >
                 Sign In
@@ -260,14 +279,80 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
             <button
               id="hero_enter_platform_btn"
               onClick={() => handleSelect('dashboard')}
-              className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-[#111111] hover:bg-[#1A42D9] text-white text-xs font-semibold tracking-tight transition-all duration-150 inline-flex items-center gap-2 cursor-pointer shadow-2xs"
+              className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-[#111111] hover:bg-[#1A42D9] text-white text-xs font-semibold tracking-tight transition-all duration-150 inline-flex items-center gap-1.5 sm:gap-2 cursor-pointer shadow-2xs"
             >
-              <span className="hidden sm:inline">Enter Platform</span>
-              <span className="sm:hidden">Enter</span>
+              <span className="hidden xs:inline">Enter Platform</span>
+              <span className="xs:hidden">Enter</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
+
+        {/* Mobile / Tablet Collapsible Menu Drawer */}
+        {isMobileMenuOpen && (
+          <div 
+            id="landing_mobile_menu_dropdown"
+            className="md:hidden mt-3 pt-3 border-t border-[#E5E2D9] flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-2 duration-150"
+          >
+            <div className="grid grid-cols-2 gap-1.5 pb-2">
+              <button
+                onClick={() => { setIsMobileMenuOpen(false); handleSelect('course'); }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-[#E5E2D9] text-xs font-medium text-stone-700 hover:text-[#111111] hover:border-stone-400 text-left"
+              >
+                <BookOpen className="w-4 h-4 text-[#1A42D9]" />
+                <span>Learn Curriculum</span>
+              </button>
+              <button
+                onClick={() => { setIsMobileMenuOpen(false); handleSelect('lab'); }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-[#E5E2D9] text-xs font-medium text-stone-700 hover:text-[#111111] hover:border-stone-400 text-left"
+              >
+                <FlaskConical className="w-4 h-4 text-[#1A42D9]" />
+                <span>ML Lab</span>
+              </button>
+              <button
+                onClick={() => { setIsMobileMenuOpen(false); handleSelect('projects'); }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-[#E5E2D9] text-xs font-medium text-stone-700 hover:text-[#111111] hover:border-stone-400 text-left"
+              >
+                <Layers className="w-4 h-4 text-[#1A42D9]" />
+                <span>Projects</span>
+              </button>
+              <button
+                onClick={() => { setIsMobileMenuOpen(false); handleSelect('quiz'); }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-[#E5E2D9] text-xs font-medium text-stone-700 hover:text-[#111111] hover:border-stone-400 text-left"
+              >
+                <Trophy className="w-4 h-4 text-[#1A42D9]" />
+                <span>Challenges</span>
+              </button>
+              <button
+                onClick={() => { setIsMobileMenuOpen(false); handleSelect('roadmap'); }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-[#E5E2D9] text-xs font-medium text-stone-700 hover:text-[#111111] hover:border-stone-400 text-left"
+              >
+                <Activity className="w-4 h-4 text-[#1A42D9]" />
+                <span>Roadmap</span>
+              </button>
+              <button
+                onClick={() => { setIsMobileMenuOpen(false); handleSelect('tutor'); }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-[#E5E2D9] text-xs font-medium text-stone-700 hover:text-[#111111] hover:border-stone-400 text-left"
+              >
+                <Sparkles className="w-4 h-4 text-[#1A42D9]" />
+                <span>Forge AI</span>
+              </button>
+            </div>
+            
+            <div className="pt-2 border-t border-[#E5E2D9] flex items-center justify-between">
+              <span className="text-[11px] font-mono text-stone-400 uppercase tracking-wider">
+                Full-Stack Machine Learning
+              </span>
+              <button
+                onClick={() => { setIsMobileMenuOpen(false); handleSelect('dashboard'); }}
+                className="text-xs font-semibold text-[#1A42D9] hover:underline flex items-center gap-1"
+              >
+                <span>Go to Workspaces</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* =====================================================================

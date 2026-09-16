@@ -23,6 +23,18 @@ export const svmModule: AlgorithmModule = {
   badgeColor: 'bg-rose-50 text-rose-700 border-rose-200',
   description: 'Constructs the unique optimal separating hyperplane that maximizes the geometric margin 2/||w|| to the nearest support vectors while penalizing slack errors via soft-margin parameter C.',
 
+  simpleAnalogy: 'Like paving the widest possible highway between two opposing armies: it does not just draw any line that separates them—it pushes the road outward as wide as possible until it bumps right up against the closest enemy scouts (Support Vectors)!',
+  simpleSteps: [
+    'Identify the borderline samples that are dangerously close to the opposing class.',
+    'Draw a center line right down the middle between them.',
+    'Widen the safety shoulder margin corridor on both sides until it touches those key edge samples (the "Support Vectors").'
+  ],
+  whatToTry: [
+    'Adjust the Regularization slider C from 0.1 (Soft Margin: allows some dots inside the highway) to 10.0 (Hard Margin: strictly forbids intrusions).',
+    'Drag the solid decision boundary with your mouse to steer the entire highway corridor.',
+    'Notice the highlighted glowing dots: only these Support Vectors control the entire model!'
+  ],
+
   getHypothesisText: (params, state: SVMState) => {
     return `f(x) = sgn(${state.w1.toFixed(2)}·x₁ + ${state.w2.toFixed(2)}·x₂ + ${state.bias.toFixed(1)}) • Margin γ = ${state.marginWidth.toFixed(1)} mm (C=${params.C ?? 1.0})`;
   },
@@ -77,6 +89,7 @@ export const svmModule: AlgorithmModule = {
       const x = 12 + u * 38 + (Math.random() - 0.5) * noise;
       const y = 12 + v * 38 + (Math.random() - 0.5) * noise;
       points.push({
+        id: `svm_c0_${i}`,
         x: Math.max(5, Math.min(95, x)),
         y: Math.max(5, Math.min(95, y)),
         label: 0 // Target label -1
@@ -90,6 +103,7 @@ export const svmModule: AlgorithmModule = {
       const x = 52 + u * 38 + (Math.random() - 0.5) * noise;
       const y = 52 + v * 38 + (Math.random() - 0.5) * noise;
       points.push({
+        id: `svm_c1_${i}`,
         x: Math.max(5, Math.min(95, x)),
         y: Math.max(5, Math.min(95, y)),
         label: 1 // Target label +1
@@ -103,6 +117,7 @@ export const svmModule: AlgorithmModule = {
     // Decision function: f(x) = w1*x + w2*y + bias
     const score = state.w1 * newPoint.x + state.w2 * newPoint.y + state.bias;
     return {
+      id: `custom_${Date.now()}`,
       x: Math.round(newPoint.x),
       y: Math.round(newPoint.y),
       label: score >= 0 ? 1 : 0

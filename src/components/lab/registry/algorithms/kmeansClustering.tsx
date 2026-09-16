@@ -33,6 +33,18 @@ export const kmeansModule: AlgorithmModule = {
   badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   description: 'Iteratively partitions empirical observations into K distinct Voronoi cells by minimizing within-cluster inertia (sum of squared Euclidean distances).',
 
+  simpleAnalogy: 'Like placing K coffee shops in a city so that every resident is as close as possible to their nearest shop: each shop moves to the center of its customer base until nobody has to walk further than necessary.',
+  simpleSteps: [
+    'Place K initial cluster center pins randomly on the map.',
+    'Assign each dot to whichever center pin is physically closest to it.',
+    'Move each pin to the exact average position (mean center) of all dots assigned to it. Repeat until pins stop moving!'
+  ],
+  whatToTry: [
+    'Drag any colored square centroid pin with your mouse to manually re-partition the entire space.',
+    'Change the Number of Clusters (K) from 2 to 4 to see the Voronoi mosaic divide into new territories.',
+    'Look at the "Total Inertia" metric: as you move centroids towards the dense clusters, inertia drops, signaling a tighter fit.'
+  ],
+
   getHypothesisText: (params, state: KMeansState) => {
     return `K=${params.clusters ?? 3} Centroids • Total Inertia WCSS = ${state.inertia.toFixed(1)}`;
   },
@@ -93,6 +105,7 @@ export const kmeansModule: AlgorithmModule = {
         const x = origin.x + (Math.random() - 0.5) * spread;
         const y = origin.y + (Math.random() - 0.5) * spread;
         points.push({
+          id: `km_${c}_${i}`,
           x: Math.max(5, Math.min(95, x)),
           y: Math.max(5, Math.min(95, y)),
           label: c
@@ -116,6 +129,7 @@ export const kmeansModule: AlgorithmModule = {
     });
 
     return {
+      id: `custom_${Date.now()}`,
       x: Math.round(newPoint.x),
       y: Math.round(newPoint.y),
       label: closestIndex

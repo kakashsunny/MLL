@@ -25,6 +25,7 @@ import {
 import { ALL_COURSE_MODULES } from '../../data/courseData';
 import { LessonContent, UserProgress } from '../../types';
 import { askAITutor } from '../../services/geminiService';
+import { SelfApiKeyButton } from '../common/SelfApiKeyButton';
 import confetti from 'canvas-confetti';
 
 interface CourseViewerProps {
@@ -670,6 +671,7 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({
               <div className="text-[10px] text-stone-500 font-mono font-bold">Socratic Mentor</div>
             </div>
           </div>
+          <SelfApiKeyButton variant="compact" label="Self Key" />
         </div>
 
         {/* Quick Chips */}

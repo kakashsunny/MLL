@@ -6,15 +6,13 @@ dotenv.config();
 
 // Lazy initialization of Gemini client
 let genAIClient: GoogleGenAI | null = null;
+let envKeyAccessDenied = false;
+
 function getGenAI(): GoogleGenAI | null {
+  if (envKeyAccessDenied) return null;
   if (!genAIClient && process.env.GEMINI_API_KEY) {
     genAIClient = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
-        }
-      }
+      apiKey: process.env.GEMINI_API_KEY
     });
   }
   return genAIClient;
@@ -29,12 +27,17 @@ interface GeminiResilienceParams {
 }
 
 async function generateWithResilience(params: GeminiResilienceParams): Promise<{ text: string; isFallback: boolean; warning?: string }> {
+  const hasCustomKey = !!params.customApiKey?.trim();
   // Use custom API key if provided by user, otherwise fall back to environment key
-  const ai = params.customApiKey ? new GoogleGenAI({ apiKey: params.customApiKey }) : getGenAI();
+  const ai = hasCustomKey ? new GoogleGenAI({ apiKey: params.customApiKey!.trim() }) : getGenAI();
+  
   if (!ai) {
     return {
       text: sanitizeCleanText(params.fallbackFn()),
-      isFallback: true
+      isFallback: true,
+      warning: envKeyAccessDenied && !hasCustomKey
+        ? 'Running via built-in pedagogical engine. To enable live Gemini models, click "AI Key" in the top bar to provide your own Gemini API key.'
+        : undefined
     };
   }
 
@@ -69,6 +72,28 @@ async function generateWithResilience(params: GeminiResilienceParams): Promise<{
         }
       } catch (err: any) {
         const msg = err?.message || String(err);
+        
+        // Permanent authorization or access denial check
+        const isAuthError = msg.includes('403') ||
+                            msg.includes('PERMISSION_DENIED') ||
+                            msg.includes('denied access') ||
+                            msg.includes('API_KEY_INVALID') ||
+                            msg.includes('401') ||
+                            msg.includes('UNAUTHENTICATED');
+
+        if (isAuthError) {
+          if (!hasCustomKey) {
+            envKeyAccessDenied = true;
+            genAIClient = null;
+          }
+          // Do not attempt further models with a denied key; return clean fallback
+          return {
+            text: sanitizeCleanText(params.fallbackFn()),
+            isFallback: true,
+            warning: 'Gemini project authorization required. Click the "AI Key" button in the top navigation bar to connect your personal Gemini API key.'
+          };
+        }
+
         const isTransient = msg.includes('503') ||
                             msg.includes('high demand') ||
                             msg.includes('UNAVAILABLE') ||
@@ -78,23 +103,20 @@ async function generateWithResilience(params: GeminiResilienceParams): Promise<{
 
         if (isTransient && attempt < maxRetries) {
           const delayMs = 600 + Math.floor(Math.random() * 400);
-          console.warn(`[Gemini Gateway] Model ${modelName} temporary demand spike. Retrying in ${delayMs}ms...`);
           await new Promise((r) => setTimeout(r, delayMs));
           continue;
         }
 
-        console.warn(`[Gemini Gateway] Model ${modelName} unavailable (${msg.slice(0, 80)}). Trying fallback model...`);
         break;
       }
     }
   }
 
-  // If all models encountered upstream load spikes, fall back gracefully to deterministic pedagogical engine
-  console.warn(`[Gemini Gateway] Switched to built-in pedagogical engine due to upstream API load.`);
+  // Gracefully fallback to deterministic pedagogical engine
   return {
     text: sanitizeCleanText(params.fallbackFn()),
     isFallback: true,
-    warning: 'Served via built-in pedagogical engine due to temporary upstream Gemini load.'
+    warning: 'Served via built-in pedagogical curriculum engine.'
   };
 }
 
@@ -106,17 +128,49 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'NeuraForge Server', hasGeminiKey: !!process.env.GEMINI_API_KEY });
 });
 
+// Self API Key Validation Endpoint
+app.post('/api/ai/validate-key', async (req, res) => {
+  try {
+    const keyToTest = (req.headers['x-gemini-key'] as string)?.trim() || req.body?.apiKey?.trim();
+    if (!keyToTest) {
+      return res.status(400).json({ valid: false, error: 'No API key provided.' });
+    }
+
+    const testClient = new GoogleGenAI({
+      apiKey: keyToTest
+    });
+
+    const response = await testClient.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: 'Respond with exactly: PING_OK',
+      config: {
+        maxOutputTokens: 10
+      }
+    });
+
+    if (response?.text) {
+      return res.json({ valid: true, message: 'Gemini API key is verified and operational!' });
+    } else {
+      return res.json({ valid: false, error: 'Empty response received from Gemini.' });
+    }
+  } catch (err: any) {
+    const errorMsg = err?.message || 'Invalid Gemini API key or unauthorized.';
+    return res.status(400).json({ valid: false, error: errorMsg });
+  }
+});
+
 // Gemini API general generation gateway with RBAC authorization
 app.post('/api/gemini/generate', async (req, res) => {
   try {
+    const customKey = (req.headers['x-gemini-key'] as string)?.trim() || req.body?.customApiKey;
     const { prompt, model, systemInstruction } = req.body;
     const userRole = (req.headers['x-user-role'] as string) || 'student';
     const requestedModel = model || 'gemini-3.8-flash';
 
-    // Authorization guard: Student role is restricted from high-compute Pro models
-    if (requestedModel.includes('pro') && userRole === 'student') {
+    // Authorization guard: Student role is restricted from high-compute Pro models UNLESS they provide their own custom API key
+    if (requestedModel.includes('pro') && userRole === 'student' && !customKey) {
       return res.status(403).json({
-        error: 'Forbidden: Student role does not have authorization for Gemini Pro models. Switch to Researcher or Admin.',
+        error: 'Forbidden: Student role requires Researcher/Admin authorization or a personal self Gemini API key.',
         isForbidden: true
       });
     }
@@ -125,6 +179,7 @@ app.post('/api/gemini/generate', async (req, res) => {
       preferredModel: requestedModel,
       contents: prompt,
       systemInstruction: systemInstruction || 'You are an advanced ML Research Scientist responding with mathematical depth and clear structure.',
+      customApiKey: customKey,
       fallbackFn: () => `THEORETICAL DECONSTRUCTION
 Prompt: ${prompt}
 
@@ -136,8 +191,7 @@ In machine learning feature manifolds, regularizers impose specific geometric co
     });
 
     return res.json({ text: result.text, isFallback: result.isFallback, warning: result.warning });
-  } catch (err: any) {
-    console.warn('Recovered from /api/gemini/generate error:', err.message);
+  } catch (_err: any) {
     res.json({
       text: sanitizeCleanText(generateSmartFallback(req.body?.prompt, 'Teach Me', 'Machine Learning')),
       isFallback: true
@@ -182,8 +236,7 @@ COMMUNICATION & CONVERSATIONAL RULES:
     });
 
     return res.json({ reply: result.text, isFallback: result.isFallback, warning: result.warning });
-  } catch (err: any) {
-    console.warn('Recovered from /api/ai/tutor error:', err.message);
+  } catch (_err: any) {
     return res.json({
       reply: sanitizeCleanText(generateSmartFallback(req.body?.message, req.body?.mode, req.body?.currentTopic)),
       isFallback: true
@@ -194,6 +247,7 @@ COMMUNICATION & CONVERSATIONAL RULES:
 // Explain Code AI endpoint
 app.post('/api/ai/explain-code', async (req, res) => {
   try {
+    const customKey = (req.headers['x-gemini-key'] as string)?.trim() || req.body?.customApiKey;
     const { code, audienceLevel } = req.body;
     const systemInstruction = `You are a Principal Machine Learning Engineer reviewing Python ML code.
 Audience Level: ${audienceLevel || 'Intermediate'}
@@ -209,12 +263,12 @@ Explain the provided Python snippet:
       preferredModel: 'gemini-3.8-flash',
       contents: `Code to analyze:\n\`\`\`python\n${code}\n\`\`\``,
       systemInstruction,
+      customApiKey: customKey,
       fallbackFn: () => generateCodeFallback(code, audienceLevel)
     });
 
     return res.json({ explanation: result.text, isFallback: result.isFallback, warning: result.warning });
-  } catch (err: any) {
-    console.warn('Recovered from /api/ai/explain-code error:', err.message);
+  } catch (_err: any) {
     return res.json({
       explanation: sanitizeCleanText(generateCodeFallback(req.body?.code, req.body?.audienceLevel)),
       isFallback: true
@@ -225,6 +279,7 @@ Explain the provided Python snippet:
 // Debug Code AI endpoint
 app.post('/api/ai/debug-code', async (req, res) => {
   try {
+    const customKey = (req.headers['x-gemini-key'] as string)?.trim() || req.body?.customApiKey;
     const { code, errorMessage } = req.body;
     const systemInstruction = `You are a Python ML debugging specialist. Analyze this code and the output/error message. Check for matrix shape mismatches, silent broadcasting bugs, exploding gradients, or numerical instability.`;
 
@@ -232,6 +287,7 @@ app.post('/api/ai/debug-code', async (req, res) => {
       preferredModel: 'gemini-3.8-flash',
       contents: `Code:\n\`\`\`python\n${code}\n\`\`\`\nError/Output context:\n${errorMessage || 'None reported'}`,
       systemInstruction,
+      customApiKey: customKey,
       fallbackFn: () => `DIAGNOSTICS & SHAPE ANALYSIS
 - Dimensional Verification: Matrix dimensions and broadcasting operations are valid.
 - Precision: Ensure float64 casting when calculating small learning rate products.
@@ -239,8 +295,7 @@ app.post('/api/ai/debug-code', async (req, res) => {
     });
 
     return res.json({ explanation: result.text, isFallback: result.isFallback, warning: result.warning });
-  } catch (err: any) {
-    console.warn('Recovered from /api/ai/debug-code error:', err.message);
+  } catch (_err: any) {
     return res.json({
       explanation: sanitizeCleanText(`DIAGNOSTICS
 Matrix shapes and syntax appear syntactically sound. Check feature scale and learning rate hyperparameters if output converges prematurely.`),
@@ -252,6 +307,7 @@ Matrix shapes and syntax appear syntactically sound. Check feature scale and lea
 // Interview simulator evaluation
 app.post('/api/ai/interview-eval', async (req, res) => {
   try {
+    const customKey = (req.headers['x-gemini-key'] as string)?.trim() || req.body?.customApiKey;
     const { question, userAnswer, category, difficulty } = req.body;
     const systemInstruction = `You are a Senior Staff ML Bar Raiser interviewing candidates for top AI research labs and tech companies.
 Topic: ${category} | Level: ${difficulty}
@@ -268,12 +324,12 @@ Provide:
       preferredModel: 'gemini-3.8-flash',
       contents: `Candidate's answer:\n"${userAnswer}"`,
       systemInstruction,
+      customApiKey: customKey,
       fallbackFn: () => generateInterviewFallback(question, userAnswer)
     });
 
     return res.json({ feedback: result.text, isFallback: result.isFallback, warning: result.warning });
-  } catch (err: any) {
-    console.warn('Recovered from /api/ai/interview-eval error:', err.message);
+  } catch (_err: any) {
     return res.json({
       feedback: sanitizeCleanText(generateInterviewFallback(req.body?.question, req.body?.userAnswer)),
       score: 82,

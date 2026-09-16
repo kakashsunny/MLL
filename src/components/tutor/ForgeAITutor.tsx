@@ -13,8 +13,9 @@ import {
   Bot,
   Key
 } from 'lucide-react';
-import { askAITutor, getCustomGeminiKey, setCustomGeminiKey } from '../../services/geminiService';
+import { askAITutor } from '../../services/geminiService';
 import { cleanPlainText, parseFormattedBlocks } from '../../utils/textFormatter';
+import { SelfApiKeyButton } from '../common/SelfApiKeyButton';
 
 interface Message {
   id: string;
@@ -38,11 +39,6 @@ Say hello, ask any ML/math question, or paste Python code to get started!`)
   ]);
   const [inputVal, setInputVal] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  // Custom API Key modal state
-  const [showKeyModal, setShowKeyModal] = useState<boolean>(false);
-  const [tempApiKey, setTempApiKey] = useState<string>(getCustomGeminiKey());
-  const [keySavedMsg, setKeySavedMsg] = useState<string>('');
 
   const modes = [
     { id: 'teach', label: '🧠 Socratic Teach', desc: 'Guided inquiry step-by-step' },
@@ -142,21 +138,11 @@ IMPORTANT: If the user greeted you, greet them warmly in return and ask how you 
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            id="tutor_key_config_btn"
-            onClick={() => {
-              setTempApiKey(getCustomGeminiKey());
-              setShowKeyModal(true);
-            }}
-            className="px-3 py-1.5 rounded bg-white hover:bg-stone-50 border border-[#E5E2D9] text-xs font-mono text-stone-700 flex items-center gap-1.5 transition-colors shadow-xs"
-          >
-            <Key className="w-3.5 h-3.5 text-[#1A42D9]" />
-            <span>{getCustomGeminiKey() ? 'Custom Key Active' : 'API Key'}</span>
-          </button>
+          <SelfApiKeyButton />
 
           <button
             onClick={handleResetChat}
-            className="px-3.5 py-1.5 rounded bg-white hover:bg-stone-50 border border-[#E5E2D9] text-xs font-mono text-stone-700 flex items-center gap-1.5 transition-colors shadow-xs"
+            className="px-3.5 py-1.5 rounded-none bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] text-xs font-mono text-stone-700 flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5 text-stone-400" />
             <span>New Session</span>
@@ -313,86 +299,6 @@ IMPORTANT: If the user greeted you, greet them warmly in return and ask how you 
           <Send className="w-3.5 h-3.5" />
         </button>
       </div>
-
-      {/* 6. Custom API Key Modal */}
-      {showKeyModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white border-2 border-[#111111] shadow-[6px_6px_0px_0px_rgba(17,17,17,1)] max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E5E2D9] pb-3">
-              <div className="flex items-center gap-2">
-                <Key className="w-5 h-5 text-[#1A42D9]" />
-                <h3 className="font-extrabold text-base text-[#111111]">Gemini API Key</h3>
-              </div>
-              <button
-                onClick={() => setShowKeyModal(false)}
-                className="text-stone-400 hover:text-[#111111] font-mono text-sm"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className="text-xs text-stone-600 leading-relaxed">
-              If you have your own Google Gemini API key, you can paste it below. It will be stored locally in your browser so you get direct dynamic responses without waiting for gateway recovery.
-            </p>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-mono font-bold text-stone-700">API Key</label>
-              <input
-                type="password"
-                value={tempApiKey}
-                onChange={e => setTempApiKey(e.target.value)}
-                placeholder="AIzaSy..."
-                className="w-full px-3 py-2 bg-[#FAF8F2] border border-[#111111] font-mono text-xs text-[#111111] focus:outline-none focus:ring-2 focus:ring-[#1A42D9]"
-              />
-            </div>
-
-            {keySavedMsg && (
-              <div className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 p-2">
-                {keySavedMsg}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-2">
-              <button
-                onClick={() => {
-                  setTempApiKey('');
-                  setCustomGeminiKey('');
-                  setKeySavedMsg('✓ Reset to platform gateway.');
-                  setTimeout(() => {
-                    setKeySavedMsg('');
-                    setShowKeyModal(false);
-                  }, 1000);
-                }}
-                className="text-xs font-mono text-stone-500 hover:text-red-600 underline"
-              >
-                Clear Key
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowKeyModal(false)}
-                  className="px-3 py-1.5 text-xs font-mono border border-stone-300 text-stone-600 hover:bg-stone-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setCustomGeminiKey(tempApiKey);
-                    setKeySavedMsg(tempApiKey.trim() ? '✓ Custom key saved and active!' : '✓ Reset to platform gateway.');
-                    setTimeout(() => {
-                      setKeySavedMsg('');
-                      setShowKeyModal(false);
-                    }, 1000);
-                  }}
-                  className="px-4 py-1.5 text-xs font-mono font-bold bg-[#111111] text-white hover:bg-[#1A42D9] transition-colors"
-                >
-                  Save Key
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

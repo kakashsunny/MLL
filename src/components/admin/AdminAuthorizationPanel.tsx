@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
+import { VerificationHistorySection } from './VerificationHistorySection';
+
 export const AdminAuthorizationPanel: React.FC = () => {
   const { user, profile, role, permissions, changeRole, openAuthModal } = useAuth();
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -367,7 +369,10 @@ export const AdminAuthorizationPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Firestore Audit Logs Stream */}
+      {/* 3. Certificate Validation Lookups & IP Origin Telemetry */}
+      <VerificationHistorySection />
+
+      {/* 4. Firestore Audit Logs Stream */}
       <div className="bg-white border border-[#E5E2D9] rounded-2xl p-6 shadow-2xs">
         <div className="flex items-center justify-between pb-3 border-b border-[#EAE7DD] mb-4">
           <div className="flex items-center gap-2">

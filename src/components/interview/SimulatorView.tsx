@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ALL_ML_QUESTIONS, MLInterviewQuestion } from '../../data/interview';
 import { evaluateInterviewResponse } from '../../services/geminiService';
+import { SelfApiKeyButton } from '../common/SelfApiKeyButton';
 import { cleanPlainText, parseFormattedBlocks } from '../../utils/textFormatter';
 import confetti from 'canvas-confetti';
 
@@ -143,6 +144,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <SelfApiKeyButton variant="compact" label="Self Key" />
           <button
             onClick={handlePrev}
             className="p-2 bg-white border border-[#111111] hover:bg-stone-100 text-stone-700"
@@ -252,6 +254,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              <SelfApiKeyButton variant="compact" label="Self Key" />
               <button
                 onClick={() => {
                   setUserAnswer('');

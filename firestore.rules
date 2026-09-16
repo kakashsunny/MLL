@@ -29,6 +29,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Certificates registry: Public single-document lookup for verification
+    match /certificates/{certificateId} {
+      // Publicly readable for individual certificate ID verification (URL / QR Code lookup)
+      allow get: if true;
+      // List operations require authentication and ownership/admin to prevent scraping
+      allow list: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      // Users can register their earned certificate
+      allow create: if isAuthenticated() && request.resource.data.certificateId == certificateId;
+      // Updates and deletions restricted to administrators
+      allow update, delete: if isAdmin();
+    }
+
     // Users collection and profiles
     match /users/{userId} {
       allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
@@ -52,6 +64,14 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isAuthenticated();
       allow update, delete: if false; // Immutable log records
+    }
+
+    // Verification Lookups Audit Trail with IP Origin
+    match /verification_lookups/{lookupId} {
+      allow read: if isAdmin();
+      // Public visitors verifying certificates can write lookup telemetry records
+      allow create: if true;
+      allow update, delete: if isAdmin();
     }
   }
 }

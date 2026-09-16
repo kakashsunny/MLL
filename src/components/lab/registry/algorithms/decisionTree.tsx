@@ -18,6 +18,18 @@ export const decisionTreeModule: AlgorithmModule = {
   badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
   description: 'Partitions continuous feature space into orthogonal, axis-aligned hyper-rectangles by greedily minimizing Gini impurity or Shannon entropy.',
 
+  simpleAnalogy: 'Like playing the game 20 Questions! "Is the animal bigger than a breadbox? Yes. Does it have fur? No." At each branch, it asks one simple Yes/No question to split the suspects in half until it knows the answer.',
+  simpleSteps: [
+    'Test every possible vertical and horizontal cut across the data.',
+    'Pick the single cut that produces the "purest" groups (highest information gain / lowest Gini impurity).',
+    'Repeat for each sub-box until you hit your maximum depth limit.'
+  ],
+  whatToTry: [
+    'Increase "Maximum Tree Depth" from 1 (a single "Decision Stump") to 4 (deep hierarchy with multiple boxes).',
+    'Notice how the cuts are always perpendicular straight lines—decision trees cannot make diagonal cuts!',
+    'Observe the Gini Impurity metric: 0.0 means a region is 100% pure.'
+  ],
+
   getHypothesisText: (_params, state: DecisionTreeState) => {
     return `Root Split: [x₁ ≤ ${state.splitX.toFixed(1)}] • Left Child: [x₂ ≤ ${state.splitY1.toFixed(1)}] • Right: [x₂ ≤ ${state.splitY2.toFixed(1)}]`;
   },
@@ -61,6 +73,7 @@ export const decisionTreeModule: AlgorithmModule = {
       // XOR or quadrant rule
       const label = (x > 50 && y > 45) || (x <= 50 && y <= 45) ? 1 : 0;
       points.push({
+        id: `dt_${i}`,
         x: Math.max(5, Math.min(95, Math.round(x))),
         y: Math.max(5, Math.min(95, Math.round(y))),
         label
@@ -73,6 +86,7 @@ export const decisionTreeModule: AlgorithmModule = {
     const isRight = newPoint.x > state.splitX;
     const label = isRight ? (newPoint.y > state.splitY2 ? 1 : 0) : (newPoint.y > state.splitY1 ? 0 : 1);
     return {
+      id: `custom_${Date.now()}`,
       x: Math.round(newPoint.x),
       y: Math.round(newPoint.y),
       label

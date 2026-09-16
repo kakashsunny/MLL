@@ -7,10 +7,12 @@ import {
   recordDebuggingCompletion, 
   claimCertificateRecord,
   verifyCertificateRecord,
+  verifyCertificateRecordAsync,
   updateCertificateRecipientName,
   CertificateVerificationRecord,
   saveProgress 
 } from '../../services/storageService';
+import { generateAlphanumericCertificateId } from '../../services/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   QUIZ_ASSESSMENTS, 
@@ -97,7 +99,7 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
   });
 
   const [credentialId, setCredentialId] = useState<string>(() => {
-    return userProgress.certificateId || `FFA-ML-2026-${Math.floor(100000 + Math.random() * 900000)}`;
+    return userProgress.certificateId || generateAlphanumericCertificateId('CERT');
   });
 
   const [copiedLink, setCopiedLink] = useState(false);
@@ -148,17 +150,29 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
     link.click();
   };
 
-  // Verification Search State
+  // Verification Search State (Database Lookup)
   const [verificationInput, setVerificationInput] = useState('');
   const [verificationResult, setVerificationResult] = useState<CertificateVerificationRecord | null>(null);
   const [hasSearchedVerification, setHasSearchedVerification] = useState(false);
+  const [isVerifyingDatabase, setIsVerifyingDatabase] = useState(false);
 
-  const handleRunVerification = (idToTest?: string) => {
+  const handleRunVerification = async (idToTest?: string) => {
     const target = (idToTest !== undefined ? idToTest : verificationInput).trim();
     if (!target) return;
-    const result = verifyCertificateRecord(target);
-    setVerificationResult(result);
+    setIsVerifyingDatabase(true);
     setHasSearchedVerification(true);
+    try {
+      const result = await verifyCertificateRecordAsync(target);
+      setVerificationResult(result);
+    } catch (err) {
+      setVerificationResult({
+        isValid: false,
+        certificateId: target,
+        error: 'Failed to complete database lookup. Please check network connection.'
+      });
+    } finally {
+      setIsVerifyingDatabase(false);
+    }
   };
 
   // Stage 1: Quiz State
@@ -321,7 +335,7 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
   const handleClaimCertificate = () => {
     if (!isEligible) return;
 
-    const generatedId = userProgress.certificateId || `FFA-ML-2026-${Math.floor(100000 + Math.random() * 900000)}`;
+    const generatedId = userProgress.certificateId || generateAlphanumericCertificateId('CERT');
     setCredentialId(generatedId);
     const currentDate = new Date().toLocaleDateString('en-US', {
       month: 'long',
@@ -1995,32 +2009,49 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleRunVerification();
                   }}
-                  placeholder="e.g. FFA-ML-2026-849201"
+                  placeholder="e.g. CERT-2026-X89B3"
                   className="w-full pl-10 pr-4 py-3 font-mono text-sm font-bold border-[2px] border-[#111111] bg-stone-50 focus:bg-white focus:outline-hidden focus:border-[#1A42D9] tracking-wider uppercase"
                 />
               </div>
 
               <button
                 onClick={() => handleRunVerification()}
-                className="px-6 py-3 bg-[#111111] hover:bg-[#1A42D9] text-white font-mono text-xs font-bold uppercase tracking-wider border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] cursor-pointer transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+                disabled={isVerifyingDatabase}
+                className="px-6 py-3 bg-[#111111] hover:bg-[#1A42D9] disabled:bg-stone-500 text-white font-mono text-xs font-bold uppercase tracking-wider border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] cursor-pointer disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 whitespace-nowrap"
               >
-                <Search className="w-4 h-4" />
-                <span>VERIFY CREDENTIAL</span>
+                {isVerifyingDatabase ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-amber-300" />
+                    <span>QUERYING FIRESTORE...</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4" />
+                    <span>VERIFY CREDENTIAL</span>
+                  </>
+                )}
               </button>
             </div>
 
             {/* Quick Test Links */}
-            <div className="flex items-center gap-2 flex-wrap pt-1 text-xs font-mono text-stone-600">
-              <span className="font-bold text-stone-700">Quick Test:</span>
-              <button
-                onClick={() => {
-                  setVerificationInput(credentialId);
-                  handleRunVerification(credentialId);
-                }}
-                className="underline hover:text-[#1A42D9] cursor-pointer font-bold"
-              >
-                Test with My Certificate ID ({credentialId})
-              </button>
+            <div className="flex items-center justify-between gap-2 flex-wrap pt-1 text-xs font-mono text-stone-600">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-stone-700">Quick Test:</span>
+                <button
+                  onClick={() => {
+                    setVerificationInput(credentialId);
+                    handleRunVerification(credentialId);
+                  }}
+                  className="underline hover:text-[#1A42D9] cursor-pointer font-bold"
+                >
+                  Test with My Certificate ID ({credentialId})
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-[11px] text-stone-500">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Live Firestore Database Lookup Method</span>
+              </div>
             </div>
           </div>
 
@@ -2032,14 +2063,19 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
                 <div className="bg-white border-[4px] border-emerald-800 shadow-[8px_8px_0px_0px_#065F46] overflow-hidden">
                   
                   {/* Status Banner */}
-                  <div className="bg-emerald-700 text-white px-6 py-3.5 font-mono text-xs sm:text-sm font-black tracking-wider uppercase flex items-center justify-between gap-2">
+                  <div className="bg-emerald-700 text-white px-6 py-3.5 font-mono text-xs sm:text-sm font-black tracking-wider uppercase flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
                       <ShieldCheck className="w-5 h-5 text-emerald-200 shrink-0" />
                       <span>[✓] 100% VERIFIED AUTHENTIC ACCREDITATION</span>
                     </div>
-                    <span className="text-[10px] bg-emerald-800 px-2.5 py-1 border border-emerald-600">
-                      REGISTRY RECORD #VALID
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] bg-emerald-900 px-2.5 py-1 border border-emerald-500 text-emerald-100 font-bold">
+                        DATABASE: VERIFIED IN FIRESTORE
+                      </span>
+                      <span className="text-[10px] bg-emerald-800 px-2.5 py-1 border border-emerald-600">
+                        REGISTRY RECORD #VALID
+                      </span>
+                    </div>
                   </div>
 
                   <div className="p-6 sm:p-8 space-y-6">

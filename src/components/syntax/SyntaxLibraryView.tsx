@@ -28,8 +28,9 @@ import {
   Lightbulb, 
   Tag 
 } from 'lucide-react';
-import { askAITutor, getCustomGeminiKey, setCustomGeminiKey } from '../../services/geminiService';
+import { askAITutor } from '../../services/geminiService';
 import { cleanPlainText } from '../../utils/textFormatter';
+import { SelfApiKeyButton } from '../common/SelfApiKeyButton';
 
 interface SyntaxLibraryViewProps {
   onSelectView?: (view: ViewMode) => void;
@@ -51,11 +52,6 @@ export const SyntaxLibraryView: React.FC<SyntaxLibraryViewProps> = ({
   const [aiCustomPrompt, setAiCustomPrompt] = useState<string>('');
   const [aiLoading, setAiLoading] = useState<boolean>(false);
   const [aiResponses, setAiResponses] = useState<Record<string, { prompt: string; response: string }[]>>({});
-
-  // API Key modal
-  const [showKeyModal, setShowKeyModal] = useState<boolean>(false);
-  const [tempApiKey, setTempApiKey] = useState<string>(getCustomGeminiKey());
-  const [keySavedMessage, setKeySavedMessage] = useState<string>('');
 
   const allEntries = useMemo(() => getAllSyntaxEntries(), []);
 
@@ -159,15 +155,6 @@ Provide a dynamic, highly technical, clear response with concrete memory models 
     }
   };
 
-  const handleSaveApiKey = () => {
-    setCustomGeminiKey(tempApiKey);
-    setKeySavedMessage(tempApiKey.trim() ? '✓ Custom Gemini API Key saved and active!' : '✓ Reset to NeuraForge gateway key.');
-    setTimeout(() => {
-      setKeySavedMessage('');
-      setShowKeyModal(false);
-    }, 1200);
-  };
-
   const getLibraryBadgeStyle = (lib: SyntaxLibrary) => {
     switch (lib) {
       case 'python':
@@ -221,17 +208,7 @@ Provide a dynamic, highly technical, clear response with concrete memory models 
 
           {/* Quick Actions / API Key status */}
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              id="syntax_key_config_btn"
-              onClick={() => {
-                setTempApiKey(getCustomGeminiKey());
-                setShowKeyModal(true);
-              }}
-              className="px-3.5 py-2 text-xs font-mono font-bold border border-[#111111] bg-[#FAF8F2] hover:bg-[#111111] hover:text-white transition-all flex items-center gap-2 shadow-xs"
-            >
-              <Key className="w-3.5 h-3.5 text-[#1A42D9]" />
-              <span>{getCustomGeminiKey() ? 'Custom API Key Active' : 'Configure Gemini API Key'}</span>
-            </button>
+            <SelfApiKeyButton />
 
             {onSelectView && (
               <button
@@ -609,9 +586,12 @@ Provide a dynamic, highly technical, clear response with concrete memory models 
                             Dynamic Forge AI Mentor • Live Interaction for {entry.name}
                           </span>
                         </div>
-                        <span className="text-[10px] font-mono text-stone-500">
-                          Powered by Gemini Live Gateway
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <SelfApiKeyButton variant="compact" label="Self Key" />
+                          <span className="text-[10px] font-mono text-stone-500">
+                            Powered by Gemini Live Gateway
+                          </span>
+                        </div>
                       </div>
 
                       {/* Previous conversation turns for this entry */}
@@ -688,79 +668,6 @@ Provide a dynamic, highly technical, clear response with concrete memory models 
           );
         })}
       </div>
-
-      {/* 6. Custom Gemini Key Dialog */}
-      {showKeyModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white border-2 border-[#111111] shadow-[6px_6px_0px_0px_rgba(17,17,17,1)] max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E5E2D9] pb-3">
-              <div className="flex items-center gap-2">
-                <Key className="w-5 h-5 text-[#1A42D9]" />
-                <h3 className="font-extrabold text-base text-[#111111]">Gemini API Key Configuration</h3>
-              </div>
-              <button
-                onClick={() => setShowKeyModal(false)}
-                className="text-stone-400 hover:text-[#111111] font-mono text-sm"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className="text-xs text-stone-600 leading-relaxed">
-              NeuraForge includes a built-in Gemini AI Gateway. You can also paste your own Google Gemini API key here. Your key is stored strictly in your browser’s local storage and passed securely via proxy headers.
-            </p>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-mono font-bold text-stone-700">Gemini API Key</label>
-              <input
-                type="password"
-                value={tempApiKey}
-                onChange={e => setTempApiKey(e.target.value)}
-                placeholder="AIzaSy..."
-                className="w-full px-3 py-2 bg-[#FAF8F2] border border-[#111111] font-mono text-xs text-[#111111] focus:outline-none focus:ring-2 focus:ring-[#1A42D9]"
-              />
-            </div>
-
-            {keySavedMessage && (
-              <div className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 p-2">
-                {keySavedMessage}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-2">
-              <button
-                onClick={() => {
-                  setTempApiKey('');
-                  setCustomGeminiKey('');
-                  setKeySavedMessage('✓ Reset to platform default gateway.');
-                  setTimeout(() => {
-                    setKeySavedMessage('');
-                    setShowKeyModal(false);
-                  }, 1000);
-                }}
-                className="text-xs font-mono text-stone-500 hover:text-red-600 underline"
-              >
-                Clear / Use Default
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowKeyModal(false)}
-                  className="px-3 py-1.5 text-xs font-mono border border-stone-300 text-stone-600 hover:bg-stone-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveApiKey}
-                  className="px-4 py-1.5 text-xs font-mono font-bold bg-[#111111] text-white hover:bg-[#1A42D9] transition-colors"
-                >
-                  Save Key
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

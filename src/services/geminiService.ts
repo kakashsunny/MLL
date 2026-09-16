@@ -33,10 +33,37 @@ export function getCustomGeminiKey(): string {
 
 export function setCustomGeminiKey(key: string): void {
   if (typeof window === 'undefined') return;
-  if (!key || key.trim() === '') {
+  const trimmed = key ? key.trim() : '';
+  if (!trimmed) {
     localStorage.removeItem(GEMINI_CUSTOM_KEY_STORAGE);
   } else {
-    localStorage.setItem(GEMINI_CUSTOM_KEY_STORAGE, key.trim());
+    localStorage.setItem(GEMINI_CUSTOM_KEY_STORAGE, trimmed);
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('neuraforge_gemini_key_updated', { detail: { hasKey: !!trimmed } }));
+  } catch (e) {}
+}
+
+export async function validateCustomGeminiKey(key: string): Promise<{ valid: boolean; message?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/ai/validate-key', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ apiKey: key })
+    });
+    const data = await res.json();
+    return {
+      valid: !!data.valid,
+      message: data.message,
+      error: data.error
+    };
+  } catch (err: any) {
+    return {
+      valid: false,
+      error: err?.message || 'Network error during validation'
+    };
   }
 }
 

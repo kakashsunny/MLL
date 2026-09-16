@@ -28,6 +28,7 @@ import {
   Award
 } from 'lucide-react';
 import { explainCodeSnippet } from '../../services/geminiService';
+import { SelfApiKeyButton } from '../common/SelfApiKeyButton';
 import ReactMarkdown from 'react-markdown';
 import { UserProgress, ViewMode } from '../../types';
 import { JupyterChallengesView } from './JupyterChallengesView';
@@ -634,6 +635,8 @@ export const JupyterLab: React.FC<JupyterLabProps> = ({
             <span>Ask Forge AI</span>
           </button>
 
+          <SelfApiKeyButton variant="compact" label="Self Key" />
+
           {/* Download .ipynb */}
           <button
             onClick={handleDownloadIpynb}
@@ -767,12 +770,15 @@ export const JupyterLab: React.FC<JupyterLabProps> = ({
                 Forge AI Socratic Mentor
               </h3>
             </div>
-            <button
-              onClick={() => setAiDrawerOpen(false)}
-              className="p-1 hover:bg-stone-200 rounded text-stone-500 transition-colors"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-2">
+              <SelfApiKeyButton variant="compact" label="Self Key" />
+              <button
+                onClick={() => setAiDrawerOpen(false)}
+                className="p-1 hover:bg-stone-200 rounded text-stone-500 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-4">

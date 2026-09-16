@@ -12,7 +12,13 @@ import {
   Check, 
   Activity, 
   SlidersHorizontal,
-  RotateCcw
+  RotateCcw,
+  Lightbulb,
+  BookOpen,
+  HelpCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { 
   algorithmRegistry, 
@@ -21,11 +27,27 @@ import {
   InteractiveAlgorithmContext 
 } from './registry';
 import { explainConcept } from '../../services/geminiService';
+import { SelfApiKeyButton } from '../common/SelfApiKeyButton';
+import { MLExperimentationDeck } from './MLExperimentationDeck';
 
 export const VisualMLLab: React.FC = () => {
+  // Top-level Lab Mode: Physical Workbench vs Drag-and-Drop Experimentation Deck
+  const [labMode, setLabMode] = useState<'workbench' | 'experimentation'>('workbench');
+
   // 1. Registered Algorithm Selection
   const allAlgorithms = useMemo(() => algorithmRegistry.getAll(), []);
   const [selectedAlgoId, setSelectedAlgoId] = useState<string>('linear_regression');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'regression' | 'classification' | 'clustering' | 'ensemble'>('all');
+  const [showSimpleGuide, setShowSimpleGuide] = useState<boolean>(true);
+
+  const filteredAlgorithms = useMemo(() => {
+    if (categoryFilter === 'all') return allAlgorithms;
+    if (categoryFilter === 'regression') return allAlgorithms.filter(a => a.category.toLowerCase().includes('regression'));
+    if (categoryFilter === 'classification') return allAlgorithms.filter(a => a.category.toLowerCase().includes('classification'));
+    if (categoryFilter === 'clustering') return allAlgorithms.filter(a => a.category.toLowerCase().includes('clustering') || a.category.toLowerCase().includes('dimensionality'));
+    if (categoryFilter === 'ensemble') return allAlgorithms.filter(a => a.category.toLowerCase().includes('ensemble') || a.category.toLowerCase().includes('deep learning') || a.category.toLowerCase().includes('neural'));
+    return allAlgorithms;
+  }, [allAlgorithms, categoryFilter]);
 
   const activeAlgo = useMemo(() => {
     return algorithmRegistry.get(selectedAlgoId) || algorithmRegistry.getDefault();
@@ -45,12 +67,18 @@ export const VisualMLLab: React.FC = () => {
   const handleSelectAlgorithm = (id: string) => {
     const algo = algorithmRegistry.get(id);
     if (!algo) return;
+    const defaultParams = algo.getDefaultParameters();
     setSelectedAlgoId(id);
-    setParameters(algo.getDefaultParameters());
+    setParameters(defaultParams);
     setManualState({});
     setAiExplanation(null);
     setEpoch(1);
     setStepIndex(1);
+    const newPoints = algo.generateDataset(sampleCount, noiseLevel, defaultParams);
+    setPoints(newPoints.map((p, idx) => ({
+      ...p,
+      id: p.id || `pt_${id}_${idx}_${Math.round(p.x)}_${Math.round(p.y)}`
+    })));
   };
 
   const updateParameter = (key: string, value: any) => {
@@ -89,7 +117,10 @@ export const VisualMLLab: React.FC = () => {
   // 8. Dataset Generation via Active Algorithm
   const generateData = () => {
     const newPoints = activeAlgo.generateDataset(sampleCount, noiseLevel, parameters);
-    setPoints(newPoints);
+    setPoints(newPoints.map((p, idx) => ({
+      ...p,
+      id: p.id || `pt_${selectedAlgoId}_${idx}_${Math.round(p.x)}_${Math.round(p.y)}`
+    })));
     setManualState({});
     setEpoch(1);
   };
@@ -127,6 +158,7 @@ export const VisualMLLab: React.FC = () => {
     points,
     setPoints,
     parameters,
+    params: parameters,
     updateParameter,
     toolMode,
     isDraggingHandle,
@@ -175,7 +207,12 @@ export const VisualMLLab: React.FC = () => {
       parameters
     );
 
-    setPoints(prev => [...prev, injectedPoint]);
+    const safePoint: Point = {
+      ...injectedPoint,
+      id: injectedPoint.id || `injected_${Date.now()}_${Math.random()}`
+    };
+
+    setPoints(prev => [...prev, safePoint]);
   };
 
   // 12. Animation Execution Loop
@@ -191,25 +228,25 @@ export const VisualMLLab: React.FC = () => {
     return () => clearInterval(interval);
   }, [isPlaying, animSpeed]);
 
-  // 13. Socratic Machine Mentor Request
+  // 13. Socratic Machine Mentor Request (Simplified Intuition)
   const handleAskAIExplanation = async () => {
     setIsExplaining(true);
     setAiExplanation(null);
     try {
-      let prompt = `You are Forge AI, an elite scientific mentor. The learner is exploring ${activeAlgo.name} in the Visual ML Lab workbench.\n`;
-      prompt += `Current hypothesis: ${activeAlgo.getHypothesisText(parameters, computedState)}\n`;
-      prompt += `Metrics:\n${metrics.map(m => `- ${m.label}: ${m.value}`).join('\n')}\n`;
+      let prompt = `You are a world-class machine learning teacher explaining concepts to a beginner who wants everything simple, friendly, and easy to understand without heavy math jargon.\n`;
+      prompt += `Algorithm: ${activeAlgo.name} (${activeAlgo.category})\n`;
+      prompt += `Current hypothesis/state: ${activeAlgo.getHypothesisText(parameters, computedState)}\n`;
+      prompt += `Live metrics:\n${metrics.map(m => `- ${m.label}: ${m.value}`).join('\n')}\n`;
       
-      if (activeAlgo.getSocraticPrompt) {
-        prompt += activeAlgo.getSocraticPrompt(parameters, metrics, computedState);
-      } else {
-        prompt += `Provide a concise 2-sentence mathematical intuition of the manifold and describe how altering parameters shifts convergence.`;
+      if (activeAlgo.simpleAnalogy) {
+        prompt += `Key analogy: "${activeAlgo.simpleAnalogy}"\n`;
       }
+      prompt += `Explain in 2-3 short, friendly sentences: 1) What the algorithm is doing right now in simple physical terms, 2) Why the current accuracy/loss metric makes sense, and 3) One fun thing the learner should try changing right now.`;
 
-      const res = await explainConcept(prompt, 'Scientific ML Workbench State');
+      const res = await explainConcept(prompt, 'Simple ML Intuition');
       setAiExplanation(res);
     } catch {
-      setAiExplanation(activeAlgo.defaultSocraticExplanation || "The model converges along the loss manifold. Adjusting parameters balances model bias against sample variance.");
+      setAiExplanation(activeAlgo.simpleAnalogy || activeAlgo.defaultSocraticExplanation || "The algorithm is finding the best pattern to connect your data dots with minimum errors!");
     } finally {
       setIsExplaining(false);
     }
@@ -231,40 +268,216 @@ export const VisualMLLab: React.FC = () => {
   return (
     <div id="scientific_ml_instrument_bench" className="p-4 sm:p-6 space-y-4 max-w-7xl mx-auto select-none">
       
-      {/* 1. TOP INSTRUMENT CONSOLE BANNER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E2D9] pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#1A42D9] animate-pulse" />
-            <span className="text-[10px] uppercase font-mono tracking-widest text-stone-500 font-bold">
-              MODULAR ALGORITHM INSTRUMENT • 1.0 KHZ KERNEL
+      {/* 0. PRIMARY LAB MODE SELECTOR TABS */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FAF8F2] border-[3px] border-[#111111] shadow-[4px_4px_0px_0px_#111111] p-2.5 sm:p-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            id="tab_workbench_mode"
+            onClick={() => setLabMode('workbench')}
+            className={`px-3.5 py-2 text-xs font-mono font-bold flex items-center gap-2 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all ${
+              labMode === 'workbench'
+                ? 'bg-[#111111] text-white'
+                : 'bg-white text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            <span>Physical Instrument Bench</span>
+            <span className={`text-[10px] px-1.5 py-0.2 font-normal ${labMode === 'workbench' ? 'bg-stone-800 text-stone-300' : 'bg-stone-100 text-stone-600'}`}>
+              10 Algorithms
             </span>
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${activeAlgo.badgeColor}`}>
-              {activeAlgo.badgeText}
+          </button>
+
+          <button
+            id="tab_experimentation_mode"
+            onClick={() => setLabMode('experimentation')}
+            className={`px-3.5 py-2 text-xs font-mono font-bold flex items-center gap-2 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all ${
+              labMode === 'experimentation'
+                ? 'bg-[#1A42D9] text-white ring-2 ring-blue-400'
+                : 'bg-white text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span>ML Experimentation Deck</span>
+            <span className="text-[10px] px-1.5 py-0.2 bg-amber-400 text-stone-900 font-extrabold uppercase">
+              Drag & Drop
             </span>
-          </div>
-          <h1 className="text-xl font-bold tracking-tight text-[#111111] mt-0.5">
-            Physical ML Instrument Workbench
-          </h1>
+          </button>
         </div>
 
-        {/* Modular Algorithm Channel Selector */}
-        <div className="flex flex-wrap gap-1.5 bg-white p-1.5 rounded-none border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111]">
-          {allAlgorithms.map(algo => (
-            <button
-              key={algo.id}
-              onClick={() => handleSelectAlgorithm(algo.id)}
-              className={`px-3 py-1.5 rounded-none text-xs font-mono transition-all flex items-center gap-1.5 border-[1.5px] border-[#111111] ${
-                selectedAlgoId === algo.id
-                  ? 'bg-[#111111] text-white font-bold shadow-[2px_2px_0px_0px_#111111]'
-                  : 'bg-white text-stone-700 hover:text-[#111111] hover:bg-stone-50'
-              }`}
-            >
-              <span>{algo.shortLabel}</span>
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <SelfApiKeyButton variant="compact" label="AI Key" />
         </div>
       </div>
+
+      {labMode === 'experimentation' ? (
+        <MLExperimentationDeck />
+      ) : (
+        <>
+          {/* Neural Network Cross-Link Banner */}
+          {selectedAlgoId === 'neural_network' && (
+            <div className="bg-blue-50 border-[2px] border-[#1A42D9] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-[3px_3px_0px_0px_#1A42D9]">
+              <div className="flex items-center gap-2 text-xs font-mono text-blue-950 font-bold">
+                <span className="w-2 h-2 rounded-full bg-[#1A42D9] animate-pulse" />
+                <span>Interactive Drag & Drop Neural Architecture Deck Available!</span>
+              </div>
+              <button
+                onClick={() => setLabMode('experimentation')}
+                className="px-3 py-1 bg-[#1A42D9] hover:bg-blue-800 text-white text-xs font-mono font-bold border border-[#111111] shadow-[2px_2px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all"
+              >
+                Open ML Experimentation Deck →
+              </button>
+            </div>
+          )}
+
+          {/* 1. TOP INSTRUMENT CONSOLE BANNER */}
+      <div className="space-y-3 border-b border-[#E5E2D9] pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="w-2 h-2 rounded-full bg-[#1A42D9] animate-pulse" />
+              <span className="text-[10px] uppercase font-mono tracking-widest text-stone-500 font-bold">
+                10 INTERACTIVE ALGORITHM MODULES • 1.0 KHZ KERNEL
+              </span>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${activeAlgo.badgeColor}`}>
+                {activeAlgo.badgeText}
+              </span>
+            </div>
+            <h1 className="text-xl font-bold tracking-tight text-[#111111] mt-0.5">
+              Physical ML Instrument Workbench
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSimpleGuide(!showSimpleGuide)}
+              className={`px-3 py-1.5 rounded-none text-xs font-mono font-bold transition-all flex items-center gap-1.5 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none ${
+                showSimpleGuide
+                  ? 'bg-amber-100 text-amber-950 border-amber-900'
+                  : 'bg-white text-stone-700 hover:bg-stone-50'
+              }`}
+            >
+              <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
+              <span>{showSimpleGuide ? 'Plain-English Guide: ON' : 'Plain-English Guide: OFF'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Category Filter & Modular Algorithm Channel Selector */}
+        <div className="space-y-2">
+          {/* Category Tabs */}
+          <div className="flex flex-wrap gap-1 text-[11px] font-mono">
+            {[
+              { id: 'all', label: `All Algorithms (${allAlgorithms.length})` },
+              { id: 'regression', label: 'Regression' },
+              { id: 'classification', label: 'Classification' },
+              { id: 'clustering', label: 'Clustering & Dim Reduction' },
+              { id: 'ensemble', label: 'Deep Learning & Ensembles' }
+            ].map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setCategoryFilter(cat.id as any)}
+                className={`px-2.5 py-1 text-xs font-mono transition-all border ${
+                  categoryFilter === cat.id
+                    ? 'bg-stone-900 text-white font-bold border-stone-900'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200 border-stone-300'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Algorithm Buttons */}
+          <div className="flex flex-wrap gap-1.5 bg-white p-2 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111]">
+            {filteredAlgorithms.map(algo => (
+              <button
+                key={algo.id}
+                onClick={() => handleSelectAlgorithm(algo.id)}
+                className={`px-3 py-1.5 text-xs font-mono transition-all flex items-center gap-1.5 border-[1.5px] border-[#111111] ${
+                  selectedAlgoId === algo.id
+                    ? 'bg-[#111111] text-white font-bold shadow-[2px_2px_0px_0px_#111111]'
+                    : 'bg-white text-stone-700 hover:text-[#111111] hover:bg-stone-50'
+                }`}
+              >
+                <span>{algo.shortLabel}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 1.5 PLAIN-ENGLISH INTUITION GUIDE (EDUCATIONAL / SIMPLE TO UNDERSTAND) */}
+      {showSimpleGuide && (
+        <div className="bg-amber-50/60 border-[2px] border-amber-800/80 p-4 sm:p-5 space-y-3 shadow-[3px_3px_0px_0px_#78350f]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-300 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="p-1 bg-amber-200 rounded text-amber-900">
+                <Lightbulb className="w-4 h-4" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-amber-950">
+                  Plain-English Intuition: {activeAlgo.name}
+                </h3>
+                <span className="text-[10px] font-mono text-amber-800">
+                  {activeAlgo.category} • No complicated math jargon required
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Everyday Analogy */}
+          {activeAlgo.simpleAnalogy && (
+            <div className="bg-white/90 p-3 border border-amber-300">
+              <div className="text-[10px] uppercase font-mono tracking-wider text-amber-800 font-bold mb-1">
+                Everyday Analogy
+              </div>
+              <p className="text-xs sm:text-sm text-stone-800 leading-relaxed font-sans font-medium">
+                "{activeAlgo.simpleAnalogy}"
+              </p>
+            </div>
+          )}
+
+          {/* 3 Simple Steps & What To Try Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            {/* 3 Simple Steps */}
+            {activeAlgo.simpleSteps && activeAlgo.simpleSteps.length > 0 && (
+              <div className="bg-white/80 p-3 border border-amber-200 space-y-2">
+                <div className="text-[10px] uppercase font-mono tracking-wider text-stone-600 font-bold flex items-center gap-1">
+                  <BookOpen className="w-3 h-3 text-amber-700" />
+                  <span>How It Works in 3 Simple Steps</span>
+                </div>
+                <div className="space-y-1.5">
+                  {activeAlgo.simpleSteps.map((step, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-xs text-stone-700">
+                      <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-900 font-bold font-mono text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <span>{step}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* What to Try in this Lab */}
+            {activeAlgo.whatToTry && activeAlgo.whatToTry.length > 0 && (
+              <div className="bg-white/80 p-3 border border-amber-200 space-y-2">
+                <div className="text-[10px] uppercase font-mono tracking-wider text-stone-600 font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>Interactive Lab Experiments to Try</span>
+                </div>
+                <div className="space-y-1.5">
+                  {activeAlgo.whatToTry.map((tip, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-xs text-stone-700">
+                      <span className="text-emerald-600 font-bold shrink-0 mt-0.5">▸</span>
+                      <span>{tip}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 2. UNIFIED INSTRUMENT CHASSIS: EXPANSIVE CANVAS & TACTILE RACKS */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -404,7 +617,7 @@ export const VisualMLLab: React.FC = () => {
 
                   return (
                     <circle
-                      key={i}
+                      key={p.id || `sample_pt_${i}`}
                       cx={p.x}
                       cy={100 - p.y}
                       r={isInspected ? 4.2 : (p.isSupportVector ? 3.4 : 2.5)}
@@ -535,8 +748,8 @@ export const VisualMLLab: React.FC = () => {
             {/* Secondary Dual / Triple Metrics Grid */}
             {secondaryMetrics.length > 0 && (
               <div className={`grid ${secondaryMetrics.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-2.5`}>
-                {secondaryMetrics.map(m => (
-                  <div key={m.key} className="p-2.5 rounded-none bg-[#FAF8F2] border-[2px] border-[#111111] shadow-[1px_1px_0px_0px_#111111]">
+                {secondaryMetrics.map((m, idx) => (
+                  <div key={m.key || m.id || `sec_metric_${idx}`} className="p-2.5 rounded-none bg-[#FAF8F2] border-[2px] border-[#111111] shadow-[1px_1px_0px_0px_#111111]">
                     <div className="text-[9px] font-mono text-stone-500 uppercase font-bold truncate" title={m.label}>
                       {m.label}
                     </div>
@@ -685,13 +898,16 @@ export const VisualMLLab: React.FC = () => {
                 <Sparkles className="w-3.5 h-3.5 text-[#1A42D9]" />
                 SOCRATIC INTUITION
               </span>
-              <button
-                onClick={handleAskAIExplanation}
-                disabled={isExplaining}
-                className="text-[10px] text-[#1A42D9] hover:underline font-bold"
-              >
-                {isExplaining ? 'Deriving...' : 'Ask Forge AI →'}
-              </button>
+              <div className="flex items-center gap-2">
+                <SelfApiKeyButton variant="compact" label="Self Key" />
+                <button
+                  onClick={handleAskAIExplanation}
+                  disabled={isExplaining}
+                  className="text-[10px] text-[#1A42D9] hover:underline font-bold"
+                >
+                  {isExplaining ? 'Deriving...' : 'Ask Forge AI →'}
+                </button>
+              </div>
             </div>
             <p className="text-xs text-stone-700 leading-relaxed font-sans">
               {aiExplanation || activeAlgo.defaultSocraticExplanation || "Dragging caliper handles shifts the model hypothesis. Notice how empirical risk responds in real time on the galvanometer meter."}
@@ -745,6 +961,8 @@ export const VisualMLLab: React.FC = () => {
             {generatedCode}
           </pre>
         </div>
+      )}
+        </>
       )}
     </div>
   );

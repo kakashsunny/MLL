@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ViewMode, UserProgress } from '../../types';
 import { getStoredProfile } from '../../services/storageService';
 import { useAuth } from '../../contexts/AuthContext';
+import { SelfApiKeyButton } from '../common/SelfApiKeyButton';
 import { 
   Flame, 
   Sparkles, 
@@ -247,6 +248,11 @@ export const TopBar: React.FC<TopBarProps> = ({
             </button>
           )}
 
+          {/* Global AI API Key Manager */}
+          <div className="hidden sm:flex items-center">
+            <SelfApiKeyButton variant="compact" label="AI Key" />
+          </div>
+
           {/* Role & Auth Status */}
           <div className="flex items-center gap-1.5 pl-0.5 sm:pl-1" ref={userMenuRef}>
             {/* RBAC Role Badge - Visible on tablet, laptop & desktop */}
@@ -343,6 +349,11 @@ export const TopBar: React.FC<TopBarProps> = ({
                           <span>Restart Guided Tour</span>
                         </button>
                       )}
+
+                      <div className="px-4 py-2 border-t border-stone-100 flex items-center justify-between">
+                        <span className="text-[11px] font-mono text-stone-600 font-medium">Gemini API Key</span>
+                        <SelfApiKeyButton variant="compact" label="Self Key" />
+                      </div>
                     </div>
 
                     <div className="border-t border-[#E5E2D9] pt-1">

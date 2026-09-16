@@ -4,6 +4,11 @@ import { logisticRegressionModule } from './algorithms/logisticRegression';
 import { kmeansModule } from './algorithms/kmeansClustering';
 import { svmModule } from './algorithms/svmAlgorithm';
 import { decisionTreeModule } from './algorithms/decisionTree';
+import { knnModule } from './algorithms/knnAlgorithm';
+import { neuralNetworkModule } from './algorithms/neuralNetwork';
+import { pcaModule } from './algorithms/pcaAlgorithm';
+import { naiveBayesModule } from './algorithms/naiveBayes';
+import { randomForestModule } from './algorithms/randomForest';
 
 export * from './types';
 export { linearRegressionModule } from './algorithms/linearRegression';
@@ -11,17 +16,27 @@ export { logisticRegressionModule } from './algorithms/logisticRegression';
 export { kmeansModule } from './algorithms/kmeansClustering';
 export { svmModule } from './algorithms/svmAlgorithm';
 export { decisionTreeModule } from './algorithms/decisionTree';
+export { knnModule } from './algorithms/knnAlgorithm';
+export { neuralNetworkModule } from './algorithms/neuralNetwork';
+export { pcaModule } from './algorithms/pcaAlgorithm';
+export { naiveBayesModule } from './algorithms/naiveBayes';
+export { randomForestModule } from './algorithms/randomForest';
 
 class AlgorithmRegistry {
   private algorithms: Map<string, AlgorithmModule> = new Map();
 
   constructor() {
-    // Register default suite of interactive algorithms
+    // Register complete suite of interactive algorithms
     this.register(linearRegressionModule);
     this.register(logisticRegressionModule);
     this.register(kmeansModule);
     this.register(svmModule);
     this.register(decisionTreeModule);
+    this.register(knnModule);
+    this.register(neuralNetworkModule);
+    this.register(pcaModule);
+    this.register(naiveBayesModule);
+    this.register(randomForestModule);
   }
 
   /**

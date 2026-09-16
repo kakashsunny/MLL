@@ -68,9 +68,55 @@
         "timestamp": { "type": "string", "description": "ISO timestamp" }
       },
       "required": ["id", "actorId", "action", "timestamp"]
+    },
+    "Certificate": {
+      "title": "Certificate",
+      "description": "Accredited completion certificate record issued to a student",
+      "type": "object",
+      "properties": {
+        "certificateId": { "type": "string", "description": "Unique alphanumeric certificate ID e.g. CERT-2026-X89B3" },
+        "recipientName": { "type": "string", "description": "Full legal or preferred name of recipient" },
+        "recipientEmail": { "type": "string", "description": "Email of the certificate holder" },
+        "userId": { "type": "string", "description": "Firebase Auth UID of the recipient" },
+        "courseName": { "type": "string", "description": "Title of the accredited course or track" },
+        "issuedAt": { "type": "string", "description": "ISO timestamp of issuance" },
+        "issuer": { "type": "string", "description": "Issuing institution or authority" },
+        "quizScore": { "type": "string", "description": "Score or completion summary of quizzes" },
+        "codingScore": { "type": "string", "description": "Score or completion summary of coding challenges" },
+        "debuggingScore": { "type": "string", "description": "Score or completion summary of debugging challenges" },
+        "status": { "type": "string", "description": "Status of the credential e.g. VERIFIED & AUTHENTIC" },
+        "hash": { "type": "string", "description": "Cryptographic checksum or verification hash" }
+      },
+      "required": ["certificateId", "recipientName", "courseName", "issuedAt"]
+    },
+    "VerificationLookup": {
+      "title": "VerificationLookup",
+      "description": "Log entry recording public certificate verification lookups and IP origin telemetry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "certificateId": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "isValid": { "type": "boolean" },
+        "recipientName": { "type": "string" },
+        "courseName": { "type": "string" },
+        "ipOrigin": { "type": "string" },
+        "country": { "type": "string" },
+        "deviceInfo": { "type": "string" },
+        "lookupMethod": { "type": "string" }
+      },
+      "required": ["id", "certificateId", "timestamp", "isValid", "ipOrigin"]
     }
   },
   "firestore": {
+    "/verification_lookups/{lookupId}": {
+      "schema": "VerificationLookup",
+      "description": "Audit trail of certificate validation requests with IP origin metadata"
+    },
+    "/certificates/{certificateId}": {
+      "schema": "Certificate",
+      "description": "Publicly verifiable certificate accreditation records"
+    },
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profile with role-based access information"

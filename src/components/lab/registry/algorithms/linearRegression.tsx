@@ -21,6 +21,18 @@ export const linearRegressionModule: AlgorithmModule = {
   badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
   description: 'Minimizes the sum of squared vertical residuals along a continuous 1D hyperplane using normal equations or iterative gradient steps.',
 
+  simpleAnalogy: 'Like holding a transparent ruler over a scattered group of dots and angling it so that the ruler sits right through the middle of the crowd with the smallest possible total gap to every dot.',
+  simpleSteps: [
+    'Plot your dots (e.g. House Size vs Price).',
+    'Calculate the vertical distance (gap) from each dot to your line.',
+    'Square those gaps (so big mistakes hurt more) and tilt the line until the total sum of squared gaps is at its lowest possible point.'
+  ],
+  whatToTry: [
+    'Click & drag the blue line handles directly on the canvas to manually fit the line yourself!',
+    'Click anywhere to drop an outlier far away and watch the line automatically tilt towards it.',
+    'Toggle "Show Residuals" to see the vertical error lines shrink as your fit improves.'
+  ],
+
   getHypothesisText: (_params, state: LinearRegressionState) => {
     return `ŷ = (${state.slope.toFixed(2)})·x + (${state.intercept.toFixed(1)}) • R² = ${state.r2.toFixed(3)}`;
   },
@@ -49,6 +61,7 @@ export const linearRegressionModule: AlgorithmModule = {
       const trueY = 15 + 0.7 * x;
       const noise = (Math.random() - 0.5) * noiseLevel;
       points.push({
+        id: `lr_${i}`,
         x: Math.round(x * 10) / 10,
         y: Math.max(5, Math.min(95, Math.round((trueY + noise) * 10) / 10))
       });
@@ -58,6 +71,7 @@ export const linearRegressionModule: AlgorithmModule = {
 
   onPointInjected: (newPoint) => {
     return {
+      id: `custom_${Date.now()}`,
       x: Math.round(newPoint.x),
       y: Math.round(newPoint.y)
     };

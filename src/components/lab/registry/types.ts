@@ -1,6 +1,7 @@
 import React from 'react';
 
 export interface Point {
+  id?: string;
   x: number;
   y: number;
   label?: number;
@@ -26,7 +27,8 @@ export interface ParameterDefinition<T = any> {
 }
 
 export interface AlgorithmMetric {
-  key: string;
+  key?: string;
+  id?: string;
   label: string;
   value: string | number;
   unit?: string;
@@ -34,12 +36,14 @@ export interface AlgorithmMetric {
   isPrimary?: boolean;
   barPercent?: number; // 0 - 100 for analog meter
   trend?: 'up' | 'down' | 'neutral';
+  isGood?: boolean;
 }
 
 export interface InteractiveAlgorithmContext {
   points: Point[];
   setPoints: React.Dispatch<React.SetStateAction<Point[]>>;
   parameters: Record<string, any>;
+  params?: Record<string, any>;
   updateParameter: (key: string, value: any) => void;
   toolMode: ToolMode;
   isDraggingHandle: string | number | null;
@@ -59,11 +63,22 @@ export interface AlgorithmModule {
   id: string;
   name: string;
   shortLabel: string;
-  category: 'Supervised: Regression' | 'Supervised: Classification' | 'Unsupervised: Clustering';
+  category: 
+    | 'Supervised: Regression' 
+    | 'Supervised: Classification' 
+    | 'Unsupervised: Clustering' 
+    | 'Unsupervised: Dimensionality' 
+    | 'Deep Learning: Neural Networks' 
+    | 'Ensemble Methods';
   badgeText: string;
   badgeColor: string;
   description: string;
   
+  // Simple-to-understand educational intuition
+  simpleAnalogy?: string; // Real world analogy (e.g. "Like asking your 5 closest friends for movie advice")
+  simpleSteps?: string[]; // 3 plain-English steps
+  whatToTry?: string[];   // Interactive lab experiments for the user
+
   // Mathematical hypothesis formula readout
   getHypothesisText: (params: Record<string, any>, state: any) => string;
   

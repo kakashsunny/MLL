@@ -16,6 +16,7 @@ import {
   Award
 } from 'lucide-react';
 import { explainCodeSnippet, debugPythonCode } from '../../services/geminiService';
+import { SelfApiKeyButton } from '../common/SelfApiKeyButton';
 import confetti from 'canvas-confetti';
 
 interface Recipe {
@@ -570,6 +571,8 @@ export const CodePlayground: React.FC<CodePlaygroundProps> = ({ onUpdateXP, onSe
                   <Bug className="w-3.5 h-3.5 text-amber-600" />
                   <span>Audit Shapes</span>
                 </button>
+
+                <SelfApiKeyButton variant="compact" label="Self Key" />
               </div>
             </div>
           </div>

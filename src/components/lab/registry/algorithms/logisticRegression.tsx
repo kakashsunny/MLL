@@ -25,6 +25,18 @@ export const logisticRegressionModule: AlgorithmModule = {
   badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   description: 'Models class probabilities through the Bernoulli logit link function with maximum likelihood estimation and adjustable decision thresholds.',
 
+  simpleAnalogy: 'Like an S-shaped slide: instead of predicting numbers like 200 or -50, it curves all answers smoothly between 0% (Definitely No) and 100% (Definitely Yes), cutting off at 50% for the decision line.',
+  simpleSteps: [
+    'Calculate a raw numeric score for each sample from its features.',
+    'Pass that score through an S-shaped Sigmoid curve to turn it into an honest probability between 0% and 100%.',
+    'If the probability is greater than your decision threshold (e.g. 50%), label it as Class 1 (Green); otherwise Class 0 (Coral).'
+  ],
+  whatToTry: [
+    'Slide the "Decision Threshold (θ)" from 0.2 to 0.8: notice how lowering the threshold makes the model more aggressive at predicting Class 1.',
+    'Drag the decision boundary line on the canvas to see how accuracy updates instantly.',
+    'Click anywhere on either side of the line to add a new point.'
+  ],
+
   getHypothesisText: (_params, state: LogisticRegressionState) => {
     return `P(Y=1|X) = σ(${state.w1.toFixed(2)}·x₁ + ${state.w2.toFixed(2)}·x₂ + ${state.bias.toFixed(1)}) ≥ θ(${state.threshold.toFixed(2)})`;
   },
@@ -82,6 +94,7 @@ export const logisticRegressionModule: AlgorithmModule = {
       const x = 30 + (Math.random() - 0.5) * spread;
       const y = 32 + (Math.random() - 0.5) * spread;
       points.push({
+        id: `logreg_c0_${i}`,
         x: Math.max(5, Math.min(95, x)),
         y: Math.max(5, Math.min(95, y)),
         label: 0
@@ -93,6 +106,7 @@ export const logisticRegressionModule: AlgorithmModule = {
       const x = 70 + (Math.random() - 0.5) * spread;
       const y = 68 + (Math.random() - 0.5) * spread;
       points.push({
+        id: `logreg_c1_${i}`,
         x: Math.max(5, Math.min(95, x)),
         y: Math.max(5, Math.min(95, y)),
         label: 1
@@ -107,6 +121,7 @@ export const logisticRegressionModule: AlgorithmModule = {
     const z = (state.w1 * newPoint.x + state.w2 * newPoint.y + state.bias) * (params.steepness ?? 1.0);
     const prob = 1 / (1 + Math.exp(-Math.max(-20, Math.min(20, z))));
     return {
+      id: `custom_${Date.now()}`,
       x: Math.round(newPoint.x),
       y: Math.round(newPoint.y),
       label: prob >= threshold ? 1 : 0

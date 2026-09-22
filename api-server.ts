@@ -121,7 +121,55 @@ async function generateWithResilience(params: GeminiResilienceParams): Promise<{
 }
 
 export const app = express();
+app.disable('x-powered-by');
+
+// Security & best practices headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 app.use(express.json());
+
+// Explicit SEO endpoints
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.send('User-agent: *\nAllow: /\n\nSitemap: https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/sitemap.xml\n');
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  res.type('application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/</loc>
+    <lastmod>2026-09-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/?view=course</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/?view=lab</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/?view=roadmap</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/?view=certificate</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+</urlset>`);
+});
 
 // Health check
 app.get('/api/health', (req, res) => {

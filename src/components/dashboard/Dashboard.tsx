@@ -460,7 +460,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             <form onSubmit={handleTutorSubmit} className="relative">
               <input
+                id="dashboard_tutor_query_input"
                 type="text"
+                aria-label="Ask any machine learning concept to AI Tutor"
                 placeholder="Ask any ML concept..."
                 value={tutorQuery}
                 onChange={e => setTutorQuery(e.target.value)}

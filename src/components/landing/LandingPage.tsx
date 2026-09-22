@@ -179,7 +179,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
 
   return (
     <div id="editorial_landing" className="min-h-screen bg-[#F7F5EF] text-[#111111] selection:bg-[#1A42D9]/15 selection:text-[#1A42D9]">
-      
+      {/* Skip to Main Content Link for Keyboard and Screen Reader Accessibility */}
+      <a 
+        href="#main_content" 
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-[#111111] focus:text-white focus:font-mono focus:text-xs focus:rounded focus:outline-none"
+      >
+        Skip to main content
+      </a>
+
       {/* =====================================================================
           1. CLEAN EDITORIAL NAVIGATION
       ===================================================================== */}
@@ -194,24 +201,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               className="md:hidden p-2 rounded-lg border border-[#E5E2D9] bg-white hover:bg-stone-50 text-stone-700 active:bg-stone-100 transition-colors cursor-pointer shadow-2xs"
               title={isMobileMenuOpen ? "Close navigation" : "Open navigation"}
               aria-label="Toggle navigation menu"
+              aria-expanded={isMobileMenuOpen}
             >
               {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
 
             <button 
               onClick={() => handleSelect('landing')}
-              className="text-left group"
+              className="text-left group cursor-pointer"
+              aria-label="NeuraForge Home"
             >
               <span className="font-extrabold text-base tracking-tight uppercase text-[#111111] group-hover:text-[#1A42D9] transition-colors">
                 NEURAFORGE
               </span>
-              <span className="block text-[9px] font-mono tracking-widest text-stone-400 uppercase">
+              <span className="block text-[9px] font-mono tracking-widest text-stone-600 uppercase">
                 Machine Learning Laboratory
               </span>
             </button>
             
             {/* Primary Editorial Nav Links (Desktop & Laptop) */}
-            <nav className="hidden md:flex items-center gap-6 lg:gap-8 pl-6 border-l border-[#E5E2D9] text-xs font-medium text-stone-600">
+            <nav aria-label="Main navigation" className="hidden md:flex items-center gap-6 lg:gap-8 pl-6 border-l border-[#E5E2D9] text-xs font-medium text-stone-700">
               <button 
                 onClick={() => handleSelect('course')}
                 className="hover:text-[#111111] transition-colors cursor-pointer"
@@ -354,6 +363,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
           </div>
         )}
       </header>
+
+      {/* Main Page Content Landmark */}
+      <main id="main_content">
 
       {/* =====================================================================
           2. HOMEPAGE HERO WITH THE FIRST WOW MOMENT
@@ -559,23 +571,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               {/* Live interactive controls */}
               <div className="mt-4 pt-3 border-t border-[#E5E2D9] space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-mono text-stone-500">Decision Threshold ($w \cdot x + b = 0$):</span>
+                  <span className="font-mono text-stone-600">Decision Threshold ($w \cdot x + b = 0$):</span>
                   <span className="font-mono font-bold text-[#111111]">
                     offset = {boundaryOffset > 0 ? `+${boundaryOffset}` : boundaryOffset}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <span className="text-[11px] font-mono text-stone-400">-30</span>
+                  <span className="text-[11px] font-mono text-stone-600">-30</span>
+                  <label htmlFor="hero_boundary_slider" className="sr-only">Decision boundary threshold offset slider</label>
                   <input
+                    id="hero_boundary_slider"
                     type="range"
+                    aria-label="Decision boundary threshold offset"
                     min="-30"
                     max="30"
                     value={boundaryOffset}
                     onChange={(e) => setBoundaryOffset(Number(e.target.value))}
                     className="flex-1 accent-[#1A42D9] cursor-pointer"
                   />
-                  <span className="text-[11px] font-mono text-stone-400">+30</span>
+                  <span className="text-[11px] font-mono text-stone-600">+30</span>
                 </div>
 
                 {/* Fine tuning slope and reset */}
@@ -583,17 +598,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setBoundarySlope(prev => prev === -0.85 ? -0.45 : -0.85)}
-                      className="px-2.5 py-1 rounded text-[11px] font-mono border border-[#E5E2D9] hover:border-[#111111] text-stone-700 bg-white"
+                      className="px-2.5 py-1 rounded text-[11px] font-mono border border-[#E5E2D9] hover:border-[#111111] text-stone-700 bg-white cursor-pointer"
+                      aria-label="Toggle slope configuration"
                     >
                       Slope: {boundarySlope}
                     </button>
                     <button
                       onClick={() => setIsCurved(prev => !prev)}
-                      className={`px-2.5 py-1 rounded text-[11px] font-mono border ${
+                      className={`px-2.5 py-1 rounded text-[11px] font-mono border cursor-pointer ${
                         isCurved 
                           ? 'border-[#1A42D9] text-[#1A42D9] bg-[#1A42D9]/5 font-bold' 
                           : 'border-[#E5E2D9] text-stone-700 bg-white'
                       }`}
+                      aria-label="Toggle kernel type"
                     >
                       {isCurved ? 'Kernel: Polynomial' : 'Kernel: Linear'}
                     </button>
@@ -605,8 +622,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
                       setBoundarySlope(-0.85);
                       setIsCurved(false);
                     }}
-                    className="flex items-center gap-1 text-[11px] font-mono text-stone-500 hover:text-[#111111]"
+                    className="flex items-center gap-1 text-[11px] font-mono text-stone-600 hover:text-[#111111] cursor-pointer"
                     title="Reset boundary"
+                    aria-label="Reset decision boundary to defaults"
                   >
                     <RotateCcw className="w-3 h-3" />
                     <span>Reset</span>
@@ -1116,7 +1134,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
           “NeuraForge does what no textbook or video course has ever managed: it makes high-dimensional vector spaces, gradient surfaces, and decision boundaries tangible under your fingertips.”
         </blockquote>
         <div className="text-sm font-bold text-[#111111]">Dr. Elena Rostova</div>
-        <div className="text-xs text-stone-500 font-mono mt-0.5">
+        <div className="text-xs text-stone-600 font-mono mt-0.5">
           Senior AI Research Scientist • Ex-DeepMind / Stanford AI Lab
         </div>
 
@@ -1125,9 +1143,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
           <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#1A42D9] block mb-2">
             First Principles Machine Learning
           </span>
-          <h3 className="text-2xl sm:text-3xl font-black text-[#111111] mb-3 tracking-tight">
+          <h2 className="text-2xl sm:text-3xl font-black text-[#111111] mb-3 tracking-tight">
             Ready to understand Machine Learning from first principles?
-          </h3>
+          </h2>
           <p className="text-stone-600 text-sm mb-8 max-w-lg mx-auto leading-relaxed">
             Interactive curriculum, visual experimentation lab, and intelligent Socratic feedback. No hand-waving abstractions.
           </p>
@@ -1140,6 +1158,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               <span>START LEARNING →</span>
             </button>
             <button
+              id="footer_explore_lab_btn"
               onClick={() => handleSelect('lab')}
               className="w-full sm:w-auto px-8 py-3.5 rounded-none bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[3px_3px_0px_0px_#111111] text-[#111111] text-xs font-bold font-mono tracking-wider uppercase transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
             >
@@ -1148,6 +1167,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
           </div>
         </div>
       </section>
+      </main>
 
       {/* Brutalist Responsive Footer for Mobile, Tablet, Laptop, and PC */}
       <footer className="border-t-[3px] border-[#111111] bg-[#FAF8F2] text-xs font-mono text-stone-700">

@@ -272,7 +272,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
                   <span>Fellow since {profile.joinedDate}</span>
                 </span>
                 {profile.githubUrl && (
-                  <a href={profile.githubUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[#1A42D9] hover:underline">
+                  <a href={profile.githubUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[#1A42D9] hover:underline">
                     <span>GitHub</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>

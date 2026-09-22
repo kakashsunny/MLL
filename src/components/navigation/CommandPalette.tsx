@@ -93,6 +93,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             id="command_palette_input"
             autoFocus
             type="text"
+            aria-label="Search concepts, algorithms, modules, or tools"
             placeholder="Search concepts, algorithms, modules, or tools..."
             value={query}
             onChange={e => setQuery(e.target.value)}
@@ -100,7 +101,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           />
           <button 
             onClick={onClose}
-            className="p-1 text-stone-400 hover:text-[#111111] rounded hover:bg-stone-200 transition-colors"
+            aria-label="Close command palette"
+            className="p-1 text-stone-400 hover:text-[#111111] rounded hover:bg-stone-200 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>

@@ -191,7 +191,7 @@ export const SelfApiKeyModal: React.FC<SelfApiKeyModalProps> = ({ isOpen, onClos
           {/* Key Input Field */}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-xs font-mono">
-              <label className="font-bold text-stone-900">Gemini API Key:</label>
+              <label htmlFor="self_api_key_input" className="font-bold text-stone-900">Gemini API Key:</label>
               <a 
                 href="https://aistudio.google.com/apikey" 
                 target="_blank" 
@@ -205,6 +205,8 @@ export const SelfApiKeyModal: React.FC<SelfApiKeyModalProps> = ({ isOpen, onClos
 
             <div className="relative flex items-center">
               <input
+                id="self_api_key_input"
+                aria-label="Gemini API Key input"
                 type={showKeyText ? 'text' : 'password'}
                 value={apiKeyInput}
                 onChange={(e) => setApiKeyInput(e.target.value)}
@@ -214,8 +216,9 @@ export const SelfApiKeyModal: React.FC<SelfApiKeyModalProps> = ({ isOpen, onClos
               <button
                 type="button"
                 onClick={() => setShowKeyText(!showKeyText)}
-                className="absolute right-2.5 p-1 text-stone-500 hover:text-stone-900"
+                className="absolute right-2.5 p-1 text-stone-500 hover:text-stone-900 cursor-pointer"
                 title={showKeyText ? 'Hide API Key' : 'Show API Key'}
+                aria-label={showKeyText ? 'Hide API Key' : 'Show API Key'}
               >
                 {showKeyText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

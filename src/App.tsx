@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ViewMode, UserProgress } from './types';
 import { 
   getStoredProgress,
@@ -11,34 +11,43 @@ import {
 } from './services/storageService';
 import { Sidebar } from './components/navigation/Sidebar';
 import { TopBar } from './components/navigation/TopBar';
-import { CommandPalette } from './components/navigation/CommandPalette';
-import { UserProfileModal } from './components/profile/UserProfileModal';
-import { TutorialTour } from './components/tutorial/TutorialTour';
-
-// Views
 import { LandingPage } from './components/landing/LandingPage';
-import { Dashboard } from './components/dashboard/Dashboard';
-import { VisualMLLab } from './components/lab/VisualMLLab';
-import { PandasLab } from './components/pandas/PandasLab';
-import { JupyterLab } from './components/jupyter/JupyterLab';
-import { CodePlayground } from './components/playground/CodePlayground';
-import { CourseViewer } from './components/course/CourseViewer';
-import { ForgeAITutor } from './components/tutor/ForgeAITutor';
-import { MathVisualizer } from './components/math/MathVisualizer';
-import { DatasetExplorer } from './components/datasets/DatasetExplorer';
-import { InterviewSimulator } from './components/interview/InterviewSimulator';
-import { ProjectArena } from './components/projects/ProjectArena';
-import { RoadmapView } from './components/roadmap/RoadmapView';
-import { ExperimentMode } from './components/experiments/ExperimentMode';
-import { GlossaryView } from './components/glossary/GlossaryView';
-import { QuizCenter } from './components/quiz/QuizCenter';
-import { SyntaxLibraryView } from './components/syntax/SyntaxLibraryView';
-import { UserProfilePage } from './components/profile/UserProfilePage';
-import { AdminAuthorizationPanel } from './components/admin/AdminAuthorizationPanel';
-import { CertificateView } from './components/certificate/CertificateView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { AuthModal } from './components/auth/AuthModal';
+
+// Dynamic lazy-loaded views for zero-cost initial landing bundle and reduced TBT
+const Dashboard = lazy(() => import('./components/dashboard/Dashboard').then(m => ({ default: m.Dashboard })));
+const VisualMLLab = lazy(() => import('./components/lab/VisualMLLab').then(m => ({ default: m.VisualMLLab })));
+const PandasLab = lazy(() => import('./components/pandas/PandasLab').then(m => ({ default: m.PandasLab })));
+const JupyterLab = lazy(() => import('./components/jupyter/JupyterLab').then(m => ({ default: m.JupyterLab })));
+const CodePlayground = lazy(() => import('./components/playground/CodePlayground').then(m => ({ default: m.CodePlayground })));
+const CourseViewer = lazy(() => import('./components/course/CourseViewer').then(m => ({ default: m.CourseViewer })));
+const ForgeAITutor = lazy(() => import('./components/tutor/ForgeAITutor').then(m => ({ default: m.ForgeAITutor })));
+const MathVisualizer = lazy(() => import('./components/math/MathVisualizer').then(m => ({ default: m.MathVisualizer })));
+const DatasetExplorer = lazy(() => import('./components/datasets/DatasetExplorer').then(m => ({ default: m.DatasetExplorer })));
+const InterviewSimulator = lazy(() => import('./components/interview/InterviewSimulator').then(m => ({ default: m.InterviewSimulator })));
+const ProjectArena = lazy(() => import('./components/projects/ProjectArena').then(m => ({ default: m.ProjectArena })));
+const RoadmapView = lazy(() => import('./components/roadmap/RoadmapView').then(m => ({ default: m.RoadmapView })));
+const ExperimentMode = lazy(() => import('./components/experiments/ExperimentMode').then(m => ({ default: m.ExperimentMode })));
+const GlossaryView = lazy(() => import('./components/glossary/GlossaryView').then(m => ({ default: m.GlossaryView })));
+const QuizCenter = lazy(() => import('./components/quiz/QuizCenter').then(m => ({ default: m.QuizCenter })));
+const SyntaxLibraryView = lazy(() => import('./components/syntax/SyntaxLibraryView').then(m => ({ default: m.SyntaxLibraryView })));
+const UserProfilePage = lazy(() => import('./components/profile/UserProfilePage').then(m => ({ default: m.UserProfilePage })));
+const AdminAuthorizationPanel = lazy(() => import('./components/admin/AdminAuthorizationPanel').then(m => ({ default: m.AdminAuthorizationPanel })));
+const CertificateView = lazy(() => import('./components/certificate/CertificateView').then(m => ({ default: m.CertificateView })));
+
+// Lazy-loaded auxiliary dialogs and modals
+const CommandPalette = lazy(() => import('./components/navigation/CommandPalette').then(m => ({ default: m.CommandPalette })));
+const UserProfileModal = lazy(() => import('./components/profile/UserProfileModal').then(m => ({ default: m.UserProfileModal })));
+const TutorialTour = lazy(() => import('./components/tutorial/TutorialTour').then(m => ({ default: m.TutorialTour })));
+const AuthModal = lazy(() => import('./components/auth/AuthModal').then(m => ({ default: m.AuthModal })));
+
+const ViewLoader: React.FC = () => (
+  <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-stone-600 font-mono text-xs gap-3">
+    <div className="w-6 h-6 border-2 border-[#1A42D9] border-t-transparent rounded-full animate-spin" />
+    <span className="text-stone-600 font-medium">Loading workspace module...</span>
+  </div>
+);
 
 const AppContent: React.FC = () => {
   const { syncStats } = useAuth();
@@ -187,119 +196,121 @@ const AppContent: React.FC = () => {
 
             {/* View Port Router */}
             <main className="flex-1 overflow-y-auto bg-[#F7F5EF] pb-10">
-              {currentView === 'dashboard' && (
-                <Dashboard
-                  userProgress={userProgress}
-                  onSelectView={setCurrentView}
-                  onContinueLearning={() => setCurrentView('course')}
-                  onUpdateXP={handleUpdateXP}
-                />
-              )}
+              <Suspense fallback={<ViewLoader />}>
+                {currentView === 'dashboard' && (
+                  <Dashboard
+                    userProgress={userProgress}
+                    onSelectView={setCurrentView}
+                    onContinueLearning={() => setCurrentView('course')}
+                    onUpdateXP={handleUpdateXP}
+                  />
+                )}
 
-              {currentView === 'lab' && (
-                <VisualMLLab />
-              )}
+                {currentView === 'lab' && (
+                  <VisualMLLab />
+                )}
 
-              {currentView === 'pandas_lab' && (
-                <PandasLab />
-              )}
+                {currentView === 'pandas_lab' && (
+                  <PandasLab />
+                )}
 
-              {currentView === 'jupyter' && (
-                <JupyterLab 
-                  onUpdateXP={handleUpdateXP}
-                  userProgress={userProgress}
-                  onSelectView={setCurrentView}
-                />
-              )}
+                {currentView === 'jupyter' && (
+                  <JupyterLab 
+                    onUpdateXP={handleUpdateXP}
+                    userProgress={userProgress}
+                    onSelectView={setCurrentView}
+                  />
+                )}
 
-              {currentView === 'certificate' && (
-                <CertificateView
-                  userProgress={userProgress}
-                  onSelectView={setCurrentView}
-                  onUpdateXP={handleUpdateXP}
-                  onProgressUpdate={(updated) => {
-                    setUserProgress({ ...updated });
-                    if (syncStats) {
-                      syncStats(updated.xp, updated.streakDays);
-                    }
-                  }}
-                />
-              )}
+                {currentView === 'certificate' && (
+                  <CertificateView
+                    userProgress={userProgress}
+                    onSelectView={setCurrentView}
+                    onUpdateXP={handleUpdateXP}
+                    onProgressUpdate={(updated) => {
+                      setUserProgress({ ...updated });
+                      if (syncStats) {
+                        syncStats(updated.xp, updated.streakDays);
+                      }
+                    }}
+                  />
+                )}
 
-              {currentView === 'playground' && (
-                <CodePlayground onUpdateXP={handleUpdateXP} onSelectView={setCurrentView} />
-              )}
+                {currentView === 'playground' && (
+                  <CodePlayground onUpdateXP={handleUpdateXP} onSelectView={setCurrentView} />
+                )}
 
-              {currentView === 'course' && (
-                <CourseViewer
-                  userProgress={userProgress}
-                  onUpdateXP={handleUpdateXP}
-                  onCompleteLesson={handleCompleteLesson}
-                />
-              )}
+                {currentView === 'course' && (
+                  <CourseViewer
+                    userProgress={userProgress}
+                    onUpdateXP={handleUpdateXP}
+                    onCompleteLesson={handleCompleteLesson}
+                  />
+                )}
 
-              {currentView === 'tutor' && (
-                <ForgeAITutor />
-              )}
+                {currentView === 'tutor' && (
+                  <ForgeAITutor />
+                )}
 
-              {currentView === 'math' && (
-                <MathVisualizer />
-              )}
+                {currentView === 'math' && (
+                  <MathVisualizer />
+                )}
 
-              {currentView === 'datasets' && (
-                <DatasetExplorer />
-              )}
+                {currentView === 'datasets' && (
+                  <DatasetExplorer />
+                )}
 
-              {currentView === 'interview' && (
-                <InterviewSimulator onUpdateXP={handleUpdateXP} />
-              )}
+                {currentView === 'interview' && (
+                  <InterviewSimulator onUpdateXP={handleUpdateXP} />
+                )}
 
-              {currentView === 'projects' && (
-                <ProjectArena />
-              )}
+                {currentView === 'projects' && (
+                  <ProjectArena />
+                )}
 
-              {currentView === 'roadmap' && (
-                <RoadmapView onSelectView={setCurrentView} />
-              )}
+                {currentView === 'roadmap' && (
+                  <RoadmapView onSelectView={setCurrentView} />
+                )}
 
-              {currentView === 'experiments' && (
-                <ExperimentMode />
-              )}
+                {currentView === 'experiments' && (
+                  <ExperimentMode />
+                )}
 
-              {currentView === 'glossary' && (
-                <GlossaryView />
-              )}
+                {currentView === 'glossary' && (
+                  <GlossaryView />
+                )}
 
-              {currentView === 'syntax' && (
-                <SyntaxLibraryView onSelectView={setCurrentView} />
-              )}
+                {currentView === 'syntax' && (
+                  <SyntaxLibraryView onSelectView={setCurrentView} />
+                )}
 
-              {currentView === 'quiz' && (
-                <QuizCenter onUpdateXP={handleUpdateXP} onSelectView={setCurrentView} />
-              )}
+                {currentView === 'quiz' && (
+                  <QuizCenter onUpdateXP={handleUpdateXP} onSelectView={setCurrentView} />
+                )}
 
-              {currentView === 'profile' && (
-                <UserProfilePage
-                  userProgress={userProgress}
-                  onSelectView={setCurrentView}
-                  onRestartTutorial={() => setIsTourOpen(true)}
-                  onResetProgress={() => {
-                    const fresh: UserProgress = {
-                      ...DEFAULT_PROGRESS,
-                      xp: 0,
-                      streakDays: 1,
-                      completedLessons: [],
-                      level: 'ML Explorer'
-                    };
-                    saveUserProgress(fresh);
-                    setUserProgress(fresh);
-                  }}
-                />
-              )}
+                {currentView === 'profile' && (
+                  <UserProfilePage
+                    userProgress={userProgress}
+                    onSelectView={setCurrentView}
+                    onRestartTutorial={() => setIsTourOpen(true)}
+                    onResetProgress={() => {
+                      const fresh: UserProgress = {
+                        ...DEFAULT_PROGRESS,
+                        xp: 0,
+                        streakDays: 1,
+                        completedLessons: [],
+                        level: 'ML Explorer'
+                      };
+                      saveUserProgress(fresh);
+                      setUserProgress(fresh);
+                    }}
+                  />
+                )}
 
-              {currentView === 'admin' && (
-                <AdminAuthorizationPanel />
-              )}
+                {currentView === 'admin' && (
+                  <AdminAuthorizationPanel />
+                )}
+              </Suspense>
             </main>
           </div>
         </div>
@@ -347,51 +358,60 @@ const AppContent: React.FC = () => {
         </footer>
       )}
 
-      {/* Global Command Palette (⌘K) */}
-      <CommandPalette
-        isOpen={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-        onSelectView={view => {
-          setCurrentView(view);
-          setCommandPaletteOpen(false);
-        }}
-      />
+      {/* Lazy-loaded Dialogs & Modals inside Suspense */}
+      <Suspense fallback={null}>
+        {/* Global Command Palette (⌘K) */}
+        {commandPaletteOpen && (
+          <CommandPalette
+            isOpen={commandPaletteOpen}
+            onClose={() => setCommandPaletteOpen(false)}
+            onSelectView={view => {
+              setCurrentView(view);
+              setCommandPaletteOpen(false);
+            }}
+          />
+        )}
 
-      {/* User Profile Modal */}
-      <UserProfileModal
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-        userProgress={userProgress}
-        onOpenFullProfile={() => {
-          setIsProfileOpen(false);
-          setCurrentView('profile');
-        }}
-        onRestartTutorial={() => {
-          setIsProfileOpen(false);
-          setIsTourOpen(true);
-        }}
-        onResetProgress={() => {
-          const fresh: UserProgress = {
-            ...DEFAULT_PROGRESS,
-            xp: 0,
-            streakDays: 0,
-            completedLessons: [],
-            level: 'ML Explorer'
-          };
-          saveUserProgress(fresh);
-          setUserProgress(fresh);
-        }}
-      />
+        {/* User Profile Modal */}
+        {isProfileOpen && (
+          <UserProfileModal
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
+            userProgress={userProgress}
+            onOpenFullProfile={() => {
+              setIsProfileOpen(false);
+              setCurrentView('profile');
+            }}
+            onRestartTutorial={() => {
+              setIsProfileOpen(false);
+              setIsTourOpen(true);
+            }}
+            onResetProgress={() => {
+              const fresh: UserProgress = {
+                ...DEFAULT_PROGRESS,
+                xp: 0,
+                streakDays: 0,
+                completedLessons: [],
+                level: 'ML Explorer'
+              };
+              saveUserProgress(fresh);
+              setUserProgress(fresh);
+            }}
+          />
+        )}
 
-      {/* Interactive Tutorial Tour */}
-      <TutorialTour
-        isOpen={isTourOpen}
-        onClose={() => setIsTourOpen(false)}
-        onNavigateView={view => setCurrentView(view)}
-      />
+        {/* Interactive Tutorial Tour */}
+        {isTourOpen && (
+          <TutorialTour
+            isOpen={isTourOpen}
+            onClose={() => setIsTourOpen(false)}
+            onNavigateView={view => setCurrentView(view)}
+          />
+        )}
 
-      {/* Firebase Authentication & Role Selection Modal */}
-      <AuthModal />
+        {/* Firebase Authentication & Role Selection Modal */}
+        <AuthModal />
+      </Suspense>
     </div>
   );
 };

@@ -352,13 +352,14 @@ export const AuthModal: React.FC = () => {
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             {mode === 'signup' && (
               <div>
-                <label className="block text-xs font-mono font-bold text-stone-700 mb-1">
+                <label htmlFor="auth_input_name" className="block text-xs font-mono font-bold text-stone-700 mb-1">
                   Full Name / Researcher Alias
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                   <input
                     id="auth_input_name"
+                    aria-label="Full Name or Researcher Alias"
                     type="text"
                     required
                     value={displayName}
@@ -371,13 +372,14 @@ export const AuthModal: React.FC = () => {
             )}
 
             <div>
-              <label className="block text-xs font-mono font-bold text-stone-700 mb-1">
+              <label htmlFor="auth_input_email" className="block text-xs font-mono font-bold text-stone-700 mb-1">
                 Email Address
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                 <input
                   id="auth_input_email"
+                  aria-label="Email Address"
                   type="email"
                   required
                   value={email}
@@ -391,14 +393,14 @@ export const AuthModal: React.FC = () => {
             {mode !== 'forgot' && (
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-mono font-bold text-stone-700">
+                  <label htmlFor="auth_input_password" className="text-xs font-mono font-bold text-stone-700">
                     Password
                   </label>
                   {mode === 'login' && (
                     <button
                       type="button"
                       onClick={() => { setMode('forgot'); setError(null); setSuccessMessage(null); }}
-                      className="text-[11px] font-mono text-[#1A42D9] hover:underline"
+                      className="text-[11px] font-mono text-[#1A42D9] hover:underline cursor-pointer"
                     >
                       Forgot password?
                     </button>
@@ -408,6 +410,7 @@ export const AuthModal: React.FC = () => {
                   <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
                   <input
                     id="auth_input_password"
+                    aria-label="Password"
                     type={showPassword ? 'text' : 'password'}
                     required
                     minLength={6}
@@ -419,8 +422,9 @@ export const AuthModal: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 text-stone-400 hover:text-stone-700 transition-colors"
+                    className="absolute right-3 top-2.5 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer"
                     title={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>

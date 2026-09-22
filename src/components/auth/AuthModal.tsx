@@ -137,7 +137,7 @@ export const AuthModal: React.FC = () => {
         setSuccessMessage(`Password reset link dispatched to ${email.trim()}. Check your inbox.`);
       }
     } catch (err: any) {
-      console.error('Auth error:', err);
+      console.warn('Auth operation notice:', err);
       setError(formatAuthError(err));
     }
   };
@@ -149,7 +149,7 @@ export const AuthModal: React.FC = () => {
     try {
       await loginWithGoogle(selectedRole);
     } catch (err: any) {
-      console.error('Google auth error:', err);
+      console.warn('Google auth notice:', err);
       setError(formatAuthError(err));
     }
   };
@@ -161,7 +161,7 @@ export const AuthModal: React.FC = () => {
     try {
       await loginWithGoogleRedirect();
     } catch (err: any) {
-      console.error('Google redirect auth error:', err);
+      console.warn('Google redirect auth notice:', err);
       setError(formatAuthError(err));
     }
   };
@@ -172,7 +172,7 @@ export const AuthModal: React.FC = () => {
     try {
       await loginAsGuest(role);
     } catch (err: any) {
-      console.error(err);
+      console.warn('Guest login notice:', err);
       setError(formatAuthError(err));
     }
   };

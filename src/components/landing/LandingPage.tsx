@@ -349,7 +349,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
             </div>
             
             <div className="pt-2 border-t border-[#E5E2D9] flex items-center justify-between">
-              <span className="text-[11px] font-mono text-stone-400 uppercase tracking-wider">
+              <span className="text-[11px] font-mono text-stone-600 uppercase tracking-wider">
                 Full-Stack Machine Learning
               </span>
               <button
@@ -386,7 +386,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
                 SHOULDN’T FEEL<br />
                 LIKE A TEXTBOOK.
               </h1>
-              <p className="text-base sm:text-lg text-stone-600 font-normal leading-relaxed pt-2 max-w-xl">
+              <p className="text-base sm:text-lg text-stone-700 font-normal leading-relaxed pt-2 max-w-xl">
                 Learn by seeing, experimenting, coding, and building. From geometric intuition to gradient descent and neural architectures.
               </p>
             </div>
@@ -408,12 +408,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
                 className="px-5 sm:px-6 py-3 sm:py-3.5 rounded-lg bg-white hover:bg-stone-50 border border-[#E5E2D9] hover:border-[#111111] text-[#111111] text-xs sm:text-sm font-semibold tracking-tight transition-all duration-150 inline-flex items-center gap-2 cursor-pointer"
               >
                 <span>EXPLORE ML LAB</span>
-                <FlaskConical className="w-4 h-4 text-stone-500" />
+                <FlaskConical className="w-4 h-4 text-stone-600" />
               </button>
             </div>
 
             {/* Footnote specs - clean and aligned */}
-            <div className="pt-2 flex flex-wrap items-center gap-4 sm:gap-6 text-xs text-stone-500 font-mono">
+            <div className="pt-2 flex flex-wrap items-center gap-4 sm:gap-6 text-xs text-stone-700 font-mono">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-[#111111]">Interactive</span>
                 <span>Visual Intuition</span>
@@ -440,14 +440,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
                       Linear Decision Boundary
                     </span>
                   </div>
-                  <p className="text-[11px] font-mono text-stone-500 mt-0.5">
+                  <p className="text-[11px] font-mono text-stone-600 mt-0.5">
                     Binary classification: Class A vs Class B in ℝ² space
                   </p>
                 </div>
                 
                 {/* Live accuracy callout */}
                 <div className="text-right">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-stone-500 block">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-stone-600 block">
                     Classification Accuracy
                   </span>
                   <div className="text-xl sm:text-2xl font-extrabold font-mono text-[#111111]">
@@ -635,13 +635,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               {/* Real-time metrics breakdown */}
               <div className="grid grid-cols-3 gap-3 mt-6 pt-5 border-t-[2px] border-[#111111] text-center">
                 <div className="bg-[#FAF8F2] p-3 rounded-none border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111]">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold block">Classified</span>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-stone-700 font-bold block">Classified</span>
                   <span className="text-sm sm:text-base font-bold font-mono text-[#111111]">
                     {classificationResults.correct} / {classificationResults.total}
                   </span>
                 </div>
                 <div className="bg-[#FAF8F2] p-3 rounded-none border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111]">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold block">Misclassified</span>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-stone-700 font-bold block">Misclassified</span>
                   <span className={`text-sm sm:text-base font-bold font-mono ${
                     classificationResults.total - classificationResults.correct > 0 ? 'text-rose-700' : 'text-stone-700'
                   }`}>
@@ -649,7 +649,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
                   </span>
                 </div>
                 <div className="bg-[#FAF8F2] p-3 rounded-none border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111]">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-stone-500 font-bold block">Empirical Loss ℒ</span>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-stone-700 font-bold block">Empirical Loss ℒ</span>
                   <span className="text-sm sm:text-base font-bold font-mono text-[#1A42D9]">
                     {(1 - classificationResults.accuracy / 100).toFixed(3)}
                   </span>
@@ -746,13 +746,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               <div className="flex items-center justify-between mt-4 text-xs font-mono">
                 <button
                   onClick={() => setGdStep(prev => (prev + 1) % gdPath.length)}
-                  className="px-3 py-1.5 rounded-none bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] text-stone-900 font-bold active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all"
+                  className="px-3 py-1.5 rounded-none bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] text-stone-900 font-bold active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
+                  aria-label="Step forward gradient descent simulation"
                 >
                   Step Forward (η = 0.05)
                 </button>
                 <button
                   onClick={() => setGdStep(0)}
-                  className="text-stone-500 hover:text-[#111111] font-bold"
+                  className="text-stone-700 hover:text-[#111111] font-bold cursor-pointer"
+                  aria-label="Reset gradient descent simulation ball to start"
                 >
                   Reset Ball
                 </button>
@@ -832,13 +834,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               <div className="flex items-center justify-between mt-4 text-xs font-mono">
                 <button
                   onClick={() => setKmeansIter(prev => (prev % 3) + 1)}
-                  className="px-3 py-1.5 rounded-none bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] text-stone-900 font-bold active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all"
+                  className="px-3 py-1.5 rounded-none bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] text-stone-900 font-bold active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
+                  aria-label="Step forward K-means clustering iteration"
                 >
                   Step Iteration ({kmeansIter}/3)
                 </button>
                 <button
                   onClick={() => setKmeansIter(1)}
-                  className="text-stone-500 hover:text-[#111111] font-bold"
+                  className="text-stone-700 hover:text-[#111111] font-bold cursor-pointer"
+                  aria-label="Reset k-means centroids to iteration 1"
                 >
                   Reset Centroids
                 </button>
@@ -881,18 +885,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
                   <div className="bg-white border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] px-2.5 py-1 rounded-none text-[10px] font-mono font-bold text-[#111111]">
                     [ {activeSplitFeature} &lt; 2.45 cm ]
                   </div>
-                  <div className="flex justify-between w-40 text-[9px] font-mono text-stone-500 font-bold">
+                  <div className="flex justify-between w-40 text-[9px] font-mono text-stone-700 font-bold">
                     <span>True ↙</span>
                     <span>↘ False</span>
                   </div>
                   <div className="flex justify-between w-44 gap-2">
                     <div className="bg-white border-[2px] border-[#111111] p-1.5 rounded-none text-[9px] font-mono text-center flex-1 shadow-[1px_1px_0px_0px_#111111]">
                       <span className="text-[#1A42D9] font-bold block">Setosa (50/50)</span>
-                      <span className="text-stone-500">Gini = 0.00</span>
+                      <span className="text-stone-700 font-medium">Gini = 0.00</span>
                     </div>
                     <div className="bg-white border-[2px] border-[#111111] p-1.5 rounded-none text-[9px] font-mono text-center flex-1 shadow-[1px_1px_0px_0px_#111111]">
                       <span className="text-[#D97706] font-bold block">Versicolor (48/54)</span>
-                      <span className="text-stone-500">Gini = 0.16</span>
+                      <span className="text-stone-700 font-medium">Gini = 0.16</span>
                     </div>
                   </div>
                 </div>
@@ -907,11 +911,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               <div className="flex items-center justify-between mt-4 text-xs font-mono">
                 <button
                   onClick={() => setActiveSplitFeature(prev => prev === 'petal_length' ? 'petal_width' : 'petal_length')}
-                  className="px-3 py-1.5 rounded-none bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] text-stone-900 font-bold active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all"
+                  className="px-3 py-1.5 rounded-none bg-white hover:bg-stone-50 border-[2px] border-[#111111] shadow-[2px_2px_0px_0px_#111111] text-stone-900 font-bold active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
+                  aria-label="Toggle split feature for decision tree"
                 >
                   Split: {activeSplitFeature}
                 </button>
-                <span className="text-[11px] font-mono text-stone-500 font-bold">Max Depth: 3</span>
+                <span className="text-[11px] font-mono text-stone-700 font-bold">Max Depth: 3</span>
               </div>
             </div>
 
@@ -950,7 +955,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
 
             {/* Stress Triggers Menu */}
             <div className="space-y-2.5 pt-2">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-stone-500 font-bold block mb-2">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-stone-700 font-bold block mb-2">
                 Select Stress Condition:
               </span>
               {(['NOISE', 'REMOVE_FEATURES', 'IMBALANCE', 'OVERFIT', 'LEAKAGE'] as BreakMode[]).map((mode) => (
@@ -967,7 +972,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
                     {mode.replace('_', ' ')}
                   </span>
                   <span className={`text-[11px] font-bold font-mono ${
-                    activeBreakMode === mode ? 'text-[#1A42D9]' : 'text-stone-500'
+                    activeBreakMode === mode ? 'text-[#1A42D9]' : 'text-stone-700'
                   }`}>
                     {breakDetails[mode].accuracy}% Acc
                   </span>
@@ -981,7 +986,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
             <div className="bg-white border-[3px] border-[#111111] shadow-[6px_6px_0px_0px_#111111] rounded-none p-6 sm:p-8">
               <div className="flex items-center justify-between border-b-[2px] border-[#111111] pb-4 mb-6">
                 <div>
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 font-bold block">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-stone-700 font-bold block">
                     Diagnostic Output
                   </span>
                   <div className="text-xl font-black text-[#111111] tracking-tight">
@@ -989,7 +994,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 font-bold block">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-stone-700 font-bold block">
                     Degraded Accuracy
                   </span>
                   <div className={`text-3xl sm:text-4xl font-black font-mono ${breakDetails[activeBreakMode].color}`}>
@@ -1052,7 +1057,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
       ===================================================================== */}
       <section className="px-6 lg:px-12 py-24 max-w-7xl mx-auto border-b border-[#E5E2D9]">
         <div className="max-w-3xl mb-16">
-          <span className="text-xs font-mono font-bold uppercase tracking-widest text-stone-500 block mb-2">
+          <span className="text-xs font-mono font-bold uppercase tracking-widest text-stone-700 block mb-2">
             Pedagogy
           </span>
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#111111]">
@@ -1108,7 +1113,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               className="bg-white border-[3px] border-[#111111] shadow-[4px_4px_0px_0px_#111111] p-6 rounded-none space-y-3 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#111111] transition-all"
             >
               <div className="flex items-center justify-between border-b-[2px] border-[#111111] pb-2.5">
-                <span className="text-xs font-mono font-bold text-stone-500">
+                <span className="text-xs font-mono font-bold text-stone-700">
                   STAGE {item.step}
                 </span>
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-none bg-[#FAF8F2] text-stone-800 border-[2px] border-[#111111]">
@@ -1179,7 +1184,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
               <span className="font-bold text-[#111111]">LOCAL WASM RUNTIME:</span>
               <span className="text-stone-600">Pyodide 0.25 • 0ms Server Latency</span>
             </div>
-            <div className="flex items-center gap-4 text-stone-500 font-medium">
+            <div className="flex items-center gap-4 text-stone-700 font-medium">
               <span>IEEE 754 FLOAT64</span>
               <span>•</span>
               <span>OFFLINE FIRST</span>
@@ -1328,7 +1333,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
           </div>
 
           {/* Bottom Bar: Copyright, Device Adaptability, and Credits */}
-          <div className="mt-12 pt-8 border-t-[2px] border-[#111111] flex flex-col md:flex-row items-center justify-between gap-4 text-stone-500">
+          <div className="mt-12 pt-8 border-t-[2px] border-[#111111] flex flex-col md:flex-row items-center justify-between gap-4 text-stone-700">
             <div className="flex items-center gap-2 text-[11px]">
               <span className="font-bold text-[#111111]">© {new Date().getFullYear()} NEURAFORGE LABORATORY</span>
               <span>—</span>
@@ -1336,10 +1341,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectView, onEnterP
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-4 text-[11px]">
-              <span className="text-stone-400">OPTIMIZED FOR: MOBILE • TABLET • LAPTOP • WORKSTATION</span>
+              <span className="text-stone-600">OPTIMIZED FOR: MOBILE • TABLET • LAPTOP • WORKSTATION</span>
               <button 
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="px-2.5 py-1 bg-white border border-[#111111] text-[#111111] font-bold hover:bg-[#111111] hover:text-white transition-colors"
+                className="px-2.5 py-1 bg-white border border-[#111111] text-[#111111] font-bold hover:bg-[#111111] hover:text-white transition-colors cursor-pointer"
+                aria-label="Scroll back to top of page"
               >
                 ↑ TOP
               </button>

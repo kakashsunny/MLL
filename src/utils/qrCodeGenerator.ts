@@ -75,6 +75,6 @@ export async function drawQrCodeOnCanvas(
       img.src = qrDataUrl;
     });
   } catch (err) {
-    console.error('Error drawing QR code to canvas:', err);
+    console.warn('QR code canvas render notice:', err);
   }
 }

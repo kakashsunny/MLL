@@ -140,7 +140,7 @@ export async function fetchUserProfile(uid: string): Promise<UserProfile | null>
     }
     return null;
   } catch (err) {
-    console.error('Error fetching user profile:', err);
+    console.warn('User profile fetch notice (falling back):', err);
     return null;
   }
 }

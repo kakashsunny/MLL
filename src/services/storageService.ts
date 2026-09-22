@@ -38,7 +38,7 @@ export const getStoredProfile = (): UserProfile => {
       return { ...DEFAULT_PROFILE, ...JSON.parse(data) };
     }
   } catch (e) {
-    console.error('Failed to load profile from localStorage', e);
+    console.warn('Storage notice (profile read):', e);
   }
   return DEFAULT_PROFILE;
 };
@@ -47,7 +47,7 @@ export const saveStoredProfile = (profile: UserProfile): void => {
   try {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
   } catch (e) {
-    console.error('Failed to save profile to localStorage', e);
+    console.warn('Storage notice (profile write):', e);
   }
 };
 
@@ -215,7 +215,7 @@ const notifyProgressSubscribers = (progress: UserProgress): void => {
       try {
         cb(progress);
       } catch (err) {
-        console.error('Error in progress subscriber:', err);
+        console.warn('Notice in progress subscriber:', err);
       }
     });
   }, 0);
@@ -463,7 +463,7 @@ export const getStoredProgress = (): UserProgress => {
       };
     }
   } catch (e) {
-    console.error('Failed to load progress from localStorage', e);
+    console.warn('Storage notice (progress read):', e);
   }
   return DEFAULT_PROGRESS;
 };
@@ -484,7 +484,7 @@ export const saveProgress = (progress: UserProgress, skipRemoteSync: boolean = f
       }, 300);
     }
   } catch (e) {
-    console.error('Failed to save progress to localStorage', e);
+    console.warn('Storage notice (progress write):', e);
   }
 };
 
@@ -734,7 +734,7 @@ export const claimCertificateRecord = (certificateId: string, recipientName?: st
       console.warn('Could not mirror certificate to Firestore:', err);
     });
   } catch (e) {
-    console.error('Failed to save to certificates registry', e);
+    console.warn('Certificate registry write notice:', e);
   }
 
   return updated;
@@ -762,7 +762,7 @@ export const updateCertificateRecipientName = (name: string): UserProgress => {
         localStorage.setItem(CERTIFICATES_REGISTRY_KEY, JSON.stringify(registry));
       }
     } catch (e) {
-      console.error('Failed to update name in registry', e);
+      console.warn('Certificate registry name update notice:', e);
     }
   }
 
@@ -822,7 +822,7 @@ export const verifyCertificateRecord = (searchId: string): CertificateVerificati
       }
     }
   } catch (e) {
-    console.error('Failed to check registry', e);
+    console.warn('Certificate registry check notice:', e);
   }
 
   // 3. Fallback: If cleanId matches format but current user hasn't claimed, explain status

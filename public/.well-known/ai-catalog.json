@@ -1,0 +1,53 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ards-project/ard-spec/main/spec/schemas/ai-catalog.schema.json",
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "NeuraForge",
+    "identifier": "ai.neuraforge",
+    "documentationUrl": "https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/",
+    "logoUrl": "https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/apple-touch-icon.png"
+  },
+  "entries": [
+    {
+      "identifier": "neuraforge-ml-visualizer",
+      "displayName": "NeuraForge Interactive Machine Learning Lab & Visualizer",
+      "type": "application/json",
+      "data": {
+        "description": "Visual exploration of machine learning decision boundaries, hyperplanes, loss landscapes, and neural topologies.",
+        "capabilities": [
+          "interactive-decision-boundaries",
+          "polynomial-kernels",
+          "loss-surfaces",
+          "confusion-matrices"
+        ],
+        "endpoints": {
+          "webInterface": "https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/?view=lab",
+          "curriculum": "https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/?view=course",
+          "certification": "https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/?view=certificate"
+        }
+      },
+      "representativeQueries": [
+        "Learn machine learning decision boundaries",
+        "Interactive machine learning visualizer",
+        "Neural network loss landscape exploration"
+      ]
+    },
+    {
+      "identifier": "neuraforge-ai-tutor",
+      "displayName": "NeuraForge Socratic AI ML Tutor",
+      "type": "application/json",
+      "data": {
+        "description": "Server-side Gemini powered Socratic tutor explaining ML algorithms, gradient descent mathematics, and backpropagation.",
+        "endpoints": {
+          "tutorApi": "https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/api/tutor",
+          "health": "https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/api/health"
+        }
+      },
+      "representativeQueries": [
+        "Ask machine learning concepts",
+        "Explain backpropagation math",
+        "Understand gradient descent"
+      ]
+    }
+  ]
+}

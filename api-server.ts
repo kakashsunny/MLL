@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 
@@ -127,15 +128,17 @@ app.disable('x-powered-by');
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Link', '</.well-known/ai-catalog.json>; rel="ai-catalog"');
   next();
 });
 
 app.use(express.json());
 
-// Explicit SEO endpoints
+// Explicit SEO & Agentic Resource Discovery endpoints
 app.get('/robots.txt', (req, res) => {
   res.type('text/plain');
-  res.send('User-agent: *\nAllow: /\n\nSitemap: https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/sitemap.xml\n');
+  res.send('User-agent: *\nAllow: /\n\nSitemap: https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/sitemap.xml\nAgentmap: https://ais-pre-ajr3mtrgrkhuutcaqpajrt-303099483165.asia-southeast1.run.app/.well-known/ai-catalog.json\n');
 });
 
 app.get('/sitemap.xml', (req, res) => {
@@ -174,6 +177,12 @@ app.get('/sitemap.xml', (req, res) => {
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'NeuraForge Server', hasGeminiKey: !!process.env.GEMINI_API_KEY });
+});
+
+// Agentic Resource Discovery endpoints
+app.get(['/.well-known/ai-catalog.json', '/.well-known/ard.json'], (req, res) => {
+  res.type('application/json');
+  res.sendFile(path.join(process.cwd(), 'public/.well-known/ai-catalog.json'));
 });
 
 // Self API Key Validation Endpoint

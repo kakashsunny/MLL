@@ -118,7 +118,7 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
       .then(url => {
         if (isMounted) setQrCodeDataUrl(url);
       })
-      .catch(err => console.error('Failed to generate certificate QR code:', err));
+      .catch(err => console.warn('QR code generation notice:', err));
     return () => { isMounted = false; };
   }, [credentialId]);
 
@@ -609,7 +609,7 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
       link.click();
       setIsExportingPng(false);
     } catch (err) {
-      console.error('PNG export failed', err);
+      console.warn('PNG export notice:', err);
       setIsExportingPng(false);
     }
   };
@@ -1919,6 +1919,8 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
                           <img 
                             src={qrCodeDataUrl} 
                             alt={`Verification QR for ${credentialId}`}
+                            width="80"
+                            height="80"
                             className="w-18 h-18 sm:w-20 sm:h-20 object-contain"
                           />
                         ) : (
@@ -2330,6 +2332,8 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
                   <img
                     src={qrCodeDataUrl}
                     alt={`Verification QR Code for ${credentialId}`}
+                    width="224"
+                    height="224"
                     className="w-48 h-48 sm:w-56 sm:h-56 object-contain"
                   />
                 ) : (
